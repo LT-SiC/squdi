@@ -10,7 +10,7 @@ def create_experiment(script_path):
     """Create the NuclearOPs object and collect script metadata."""
     seq_name = os.path.basename(script_path).split(".")[0]
     nuclear = sch.create_nuclear(script_path)
-    with open(os.path.abspath(script_path), "r") as script_file:
+    with open(os.path.abspath(script_path), "r", encoding="utf-8") as script_file:
         meas_code = script_file.read()
     return nuclear, meas_code, seq_name
 
@@ -146,6 +146,7 @@ def run_nuclear_experiment(
 ):
     print(1, "Nuclear started!!!")
     nuclear.queue = queue
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = readout_duration
     nuclear.hashed = hashed
     nuclear.debug_mode = debug_mode

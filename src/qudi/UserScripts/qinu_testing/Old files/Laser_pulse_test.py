@@ -52,9 +52,9 @@ def ret_ret_mcas(pdc):
         with qua.program() as myprog:
             ou.init_program()
             ou.set_laser_power("Laser_620_pi", "Laser_620_pi_power")
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
+            ou.set_laser_power("Laser_620_det", ou.setup_parameters.general.laser_power_A1)
+            ou.set_laser_power("Laser_620", ou.setup_parameters.general.laser_power_B2)
+            ou.set_laser_power("Laser_520", ou.setup_parameters.crc.laser_power_repump)
             ou.pause(10_000)
             with infinite_loop_():
                 with for_(*from_array(ou.i_1, qua_array_1)):

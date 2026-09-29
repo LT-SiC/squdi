@@ -42,7 +42,7 @@ from qudi.logic.qudip_enhanced import *
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -59,8 +59,13 @@ def ret_ret_mcas(pdc):
         qua_array_1 = ou.get_fast_sweep_qua_array(0)
         qua_array_2 = ou.get_fast_sweep_qua_array(1)
         with qua.program() as myprog:
+            ou.init_program()
+            sna.setup_laser_powers(
+                mcas,
+                laser_power_A1="Laser_620_det_power" if use_detuned_laser else None,
+                laser_power_B2="Laser_620_power",
+            )
             with infinite_loop_():
-                ou.init_program()
 
                 if use_crc:
                     set_dc_offset(
@@ -70,10 +75,6 @@ def ret_ret_mcas(pdc):
                     wait(1 * u.us)
                     align()
                     sna.crc(mcas)
-
-                if use_detuned_laser:
-                    ou.set_laser_power("Laser_620_det", "Laser_620_det_power")
-                ou.set_laser_power("Laser_620", "Laser_620_power")
 
                 set_dc_offset("Laser_620_freq", "single", qua_array_1[0])
 
@@ -153,7 +154,7 @@ def settings(pdc={}):
             ("B_theta", [117.5, 120, 122.5, 125, 127.5, 130, 132.5]),
             ("B_amp", [150]),
             ("sweeps", range(1)),
-            ("Laser_620_power", [7]),  # nW
+            ("Laser_620_power", ([7], "slow")),  # nW
             ("Laser_520_power_repump", [100e3]),  # nW (50uW)
             ("Laser_620_freq_MHz", laser_freq_vec_MHz),
             ("click_channel", [2]),
@@ -161,7 +162,7 @@ def settings(pdc={}):
             ("repump_len", [int(1e6)]),  # ns (1s)
             # ("pulse_shape_ppg", ["continuous_sin"]),  # string
             # ("pulse_width_ppg", [20]),  # ns
-            ("Laser_620_det_power", [80]),  # nW
+            ("Laser_620_det_power", ([80], "slow")),  # nW
             ("use_crc", [False]),
             ("use_detuned_laser", [False]),
         )
@@ -177,6 +178,7 @@ def settings(pdc={}):
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

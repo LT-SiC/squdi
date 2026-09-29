@@ -29,7 +29,7 @@ importlib.reload(OPX_utils)
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -94,9 +94,8 @@ def ret_ret_mcas(pdc):
         order = int(current_iterator_df["order"].unique()[0])
         with qua.program() as myprog:
             ou.init_program()
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
+            sna.setup_laser_powers(mcas)
+
             sna.set_IQ_freq(mcas)
             ou.pause(10_000)
             with infinite_loop_(), for_each_(ou.i_1, qua_array_1):
@@ -109,16 +108,16 @@ def ret_ret_mcas(pdc):
                     #### XY decoupling ###
                     qua.align()
                     with qua.strict_timing_():
-                        sna.electron_gate(mcas, "pi/2")
+                        sna.electron_gate(mcas, "pi/2", align_elements=False)
                         ou.pause("tau_half", align_before=False, elements="MW")
                         xy_axes = xy_phase_sequence(order)
                         for i, axis in enumerate(xy_axes):
-                            sna.electron_gate(mcas, "pi", axis=axis)
+                            sna.electron_gate(mcas, "pi", axis=axis, align_elements=False)
                             if i != len(xy_axes) - 1:
                                 ou.pause("tau_half", align_before=False, elements="MW")
                                 ou.pause("tau_half", align_before=False, elements="MW")
                         ou.pause("tau_half", align_before=False, elements="MW")
-                        sna.electron_gate(mcas, "pi/2", axis=last_pulse)
+                        sna.electron_gate(mcas, "pi/2", axis=last_pulse, align_elements=False)
                     ou.pause(400)
                     ###
                     sna.ssr(mcas, state=SSR_state)
@@ -134,7 +133,7 @@ def ret_ret_mcas(pdc):
 
 def settings(pdc={}):
     # ana_seq = [["init", "<", 1, 1, 0, 1], ["result", ">", 0, 1, 0, 1], ["init", ">", 3, 1, 0, 1]]
-    ana_seq = [["init", "<", 1, 1, 0, 1], ["result", ">", 1, 1, 0, 1], ["init", ">", 3, 1, 0, 1]]
+    ana_seq = [["init", "<", nuclear.setup_parameters.ssr.init_threshold, 1, 0, 1], ["result", ">", nuclear.setup_parameters.ssr.threshold, 1, 0, 1], ["init", ">", nuclear.setup_parameters.csr.csr_threshold, 1, 0, 1]]
     # ana_seq = [["result", ">", 1, 1, 0, 1]]
     # [["init", "<", 1, 1, 0, 1], ["result", ">", 3, 1, 0, 1], ["init", ">", 20, 1, 0, 1]]
     # what does each entry do?
@@ -205,6 +204,7 @@ def settings(pdc={}):
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

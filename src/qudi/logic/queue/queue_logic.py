@@ -171,6 +171,8 @@ class queue_logic(GenericLogic):
 
     update_selected_user_script_combo_box_signal = pyqtSignal(collections.OrderedDict)
     update_queue_list = pyqtSignal(collections.OrderedDict)
+    snv_calibration_updated = pyqtSignal(object)
+    acquisition_progress = pyqtSignal(object)
     user_script_list = misc.ret_property_array_like_typ("user_script_list", str)
     guis = []  # stores names of all open guis (later on used to dump them periodically)
     _StopTimeout = 60.0
@@ -213,6 +215,7 @@ class queue_logic(GenericLogic):
         self.awg = self.OpxHolder_connector()
         self.transition_tracker = self.TransitionTracker_connector()
         self.gated_counter = self.GatedCounter_connector()
+        self.gated_counter.sigAcquisitionProgress.connect(self.acquisition_progress.emit)
         self.optimizer = self.Optimizer_connector()
         self.ple_optimize_logic = self.PleOptimizeLogic_connector()
         self.ple_scanner_logic = self.PleScannerLogic_connector()
@@ -241,6 +244,7 @@ class queue_logic(GenericLogic):
             return
 
         self._shutting_down = True
+        self.gated_counter.sigAcquisitionProgress.disconnect(self.acquisition_progress.emit)
         self.log.info("Shutting down queue logic.")
 
         if hasattr(self, "timer"):
@@ -457,6 +461,7 @@ class queue_logic(GenericLogic):
                 return
             if not hasattr(self, "current_script"):
                 self.thread.stop_request.clear()
+                self.acquisition_progress.emit(dict(phase="stopped"))
                 return
 
         if self._shutting_down:
@@ -468,11 +473,17 @@ class queue_logic(GenericLogic):
                 # userscript module. Its ``state`` tells the queue whether that
                 # run is still executing or can be finalized.
                 cun = self.cun
+                # A calibration can still be fitting/saving after acquisition
+                # has set state='idle'. Keep ownership until its worker exits.
+                worker = getattr(cun, "thread", None)
+                if worker is not None and worker.is_alive():
+                    return
                 if cun is None or cun.state not in ["run", "sequence_testing"]:
                     print("its finished, fininishing ")
                     self.finish_measurement()
                     if stop_requested:
                         self.thread.stop_request.clear()
+                        self.acquisition_progress.emit(dict(phase="stopped"))
                         return
                     self.start_next_measurement()
                 else:
@@ -488,7 +499,9 @@ class queue_logic(GenericLogic):
                 # waiting for the measurement to finish.
 
         except Exception as e:
-            print(e)
+            self.log.exception("Queue could not start or finish the measurement")
+            self._report_calibration_queue_status(getattr(self, "current_script", {}), f"Failed to start: {e}")
+            self.acquisition_progress.emit(dict(phase="failed", message=str(e)))
             self._clear_pending_queue(update_gui=not self._shutting_down, keep_current=True)
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
@@ -510,6 +523,8 @@ class queue_logic(GenericLogic):
 
         stop_request = self.thread.stop_request if self.thread is not None else multiprocess.Event()
         stop_request.clear()  # this is necessary although it shouldn't be.
+        self._report_calibration_queue_status(self.current_script, "Starting calibration")
+        self.acquisition_progress.emit(dict(phase="preparing", completed=0, total=0))
         self.log.info(
             "Starting Userscript {}...{}".format(
                 self.current_script["module_name"][10:],
@@ -621,6 +636,7 @@ class queue_logic(GenericLogic):
         """Set the cooperative abort event seen by active userscripts."""
         if self.thread is not None:
             self.thread.stop_request.set()
+            self.acquisition_progress.emit(dict(phase="stopping"))
 
     def _clear_pending_queue(self, update_gui: bool = True, keep_current: bool = False) -> None:
         """Remove queued jobs that have not started yet.
@@ -636,10 +652,11 @@ class queue_logic(GenericLogic):
         if hasattr(self, "q"):
             while True:
                 try:
-                    self.q.get_nowait()
+                    removed = self.q.get_nowait()
                 except Empty:
                     break
                 else:
+                    self._report_calibration_queue_status(removed, "Removed from queue before start")
                     self.q.task_done()
 
         if not hasattr(self, "_script_queue"):
@@ -725,7 +742,8 @@ class queue_logic(GenericLogic):
         name: Optional[str] = None,
         pd: Optional[Dict[str, Any]] = None,
         folder: Optional[str] = None,
-    ) -> None:
+        raise_on_error: bool = False,
+    ) -> bool:
         """Load a userscript module and append it to the execution/UI queues."""
         # self.confocal.counter_state = 'idle'
         # self.md.stop_awgs()
@@ -733,23 +751,24 @@ class queue_logic(GenericLogic):
         name = self.selected_user_script if name is None else name
         pd = self.user_script_params if pd is None else pd
         if name == "":
-            return
+            return False
         try:
             module_name = self.init_task(name, folder)
-            self.q.put(
-                {
-                    "module_name": module_name,
-                    "script_name": name,
-                    "script_path": self.user_script_path(name, folder),
-                    "source_mtime_ns": os.stat(self.user_script_path(name, folder)).st_mtime_ns,
-                    "pd": pd,
-                }
-            )
-            self.script_queue.append(ScriptQueueStep(module_name[10:], self.user_script_params))
+            task = {
+                "module_name": module_name,
+                "script_name": name,
+                "script_path": self.user_script_path(name, folder),
+                "source_mtime_ns": os.stat(self.user_script_path(name, folder)).st_mtime_ns,
+                "pd": pd,
+            }
+            self.script_queue.append(ScriptQueueStep(module_name[10:], pd))
+            self.q.put(task)
+            return True
         except Exception:
-            print("Queuelogic: Could not add script to queue.")
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            traceback.print_exception(exc_type, exc_value, exc_tb)
+            self.log.exception("Could not add script to queue: %s", name)
+            if raise_on_error:
+                raise
+            return False
 
     def add_rco(self) -> None:
         """Queue the legacy refocus helper script."""
@@ -758,6 +777,31 @@ class queue_logic(GenericLogic):
         name = "refocus_confocal_odmr"
         pd = self.user_script_params
         self.add_to_queue(name, pd, folder)
+
+    def add_snv_calibration(self, kind, options):
+        if self._shutting_down:
+            raise RuntimeError("The queue is shutting down. Reactivate it before queueing a calibration.")
+        if self.thread is not None and self.thread.stop_request.is_set():
+            if hasattr(self, "current_script"):
+                raise RuntimeError("The previous measurement is stopping. Wait for it to finish, then queue calibration again.")
+            # A stop from an earlier run must not discard this new request on
+            # the next scheduler tick. Clear only work belonging to that stop.
+            self._clear_pending_queue()
+            self.thread.stop_request.clear()
+        names = {"odmr": "SnV_ODMR_refocus", "rabi": "SnV_Rabi_calibration"}
+        name = names[kind]
+        if any(name in step.name for step in self.script_queue):
+            raise ValueError("This calibration is already queued or running.")
+        folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "UserScripts", "Qinu"))
+        self.add_to_queue(name=name, pd=dict(options), folder=folder, raise_on_error=True)
+        status = "Queued; waiting for the current measurement" if hasattr(self, "current_script") else "Queued; waiting for the next scheduler tick (up to 3 s)"
+        self.snv_calibration_updated.emit(dict(kind=kind, status=status))
+        return status
+
+    def _report_calibration_queue_status(self, script, status):
+        kind = {"SnV_ODMR_refocus": "odmr", "SnV_Rabi_calibration": "rabi"}.get(script.get("script_name"))
+        if kind is not None:
+            self.snv_calibration_updated.emit(dict(kind=kind, status=status))
 
     def in_script_queue(self, name: str) -> bool:
         for step in self.script_queue:

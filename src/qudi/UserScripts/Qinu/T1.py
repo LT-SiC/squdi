@@ -30,7 +30,7 @@ importlib.reload(OPX_utils)
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -46,17 +46,19 @@ def ret_ret_mcas(pdc):
         init_state = current_iterator_df["init_state"].unique()[0]
         SSR_state = current_iterator_df["SSR_state"].unique()[0]
 
-        with qua.program() as myprog, infinite_loop_():
+        with qua.program() as myprog:
             ou.init_program()
-            with for_(*from_array(ou.i_1, qua_array_1)):
-                with for_(*from_array(ou.i_2, qua_array_2)):
-                    sna.crc(mcas)
-                    sna.electron_init(mcas, init_state)
-                    sna.ssr(mcas, "e2" if init_state == "e1" else "e1")
-                    ou.pause("readout_delay")
-                    sna.ssr(mcas, SSR_state)
-                    # Charge state readout
-                    sna.csr(mcas)
+            sna.setup_laser_powers(mcas)
+            with infinite_loop_():
+                with for_(*from_array(ou.i_1, qua_array_1)):
+                    with for_(*from_array(ou.i_2, qua_array_2)):
+                        sna.crc(mcas)
+                        sna.electron_init(mcas, init_state)
+                        sna.ssr(mcas, "e2" if init_state == "e1" else "e1")
+                        ou.pause("readout_delay")
+                        sna.ssr(mcas, SSR_state)
+                        # Charge state readout
+                        sna.csr(mcas)
 
         mcas.program = myprog
         return mcas
@@ -66,9 +68,9 @@ def ret_ret_mcas(pdc):
 
 def settings(pdc={}):
     ana_seq = [
-        ["init", "<", 1, 1, 0, 1],
-        ["result", ">", 1, 1, 0, 1],
-        ["init", ">", 8, 1, 0, 1],
+        ["init", "<", nuclear.setup_parameters.ssr.init_threshold, 1, 0, 1],
+        ["result", ">", nuclear.setup_parameters.ssr.threshold, 1, 0, 1],
+        ["init", ">", nuclear.setup_parameters.csr.csr_threshold, 1, 0, 1],
     ]
     # what does each entry do?
     # ana_seq[0]: ? 'result' or 'init', init - for postselection
@@ -127,6 +129,7 @@ def settings(pdc={}):
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

@@ -19,6 +19,7 @@ from qudi.util.colordefs import QudiPalette as palettedark
 from PySide2.QtWidgets import QTableWidgetItem
 from PySide2 import QtCore, QtGui, QtWidgets
 from qudi.util import uic
+from qudi.gui.transition_tracker.setup_parameters import SetupParametersDock
 
 class TransitionTrackerMainWindow(QtWidgets.QMainWindow):
     """ Create the Main Window based on the *.ui file. """
@@ -30,8 +31,37 @@ class TransitionTrackerMainWindow(QtWidgets.QMainWindow):
         this_dir = os.path.dirname(__file__)
         ui_file = os.path.join(this_dir, 'transition_tracker.ui')
         # Load it
-        uic.loadUi(ui_file, self) #FIXME here is the error somehow now...
-        self.show()
+        form = QtWidgets.QWidget()
+        uic.loadUi(ui_file, form)
+        self.setCentralWidget(form)
+        # The historical UI is a QWidget with absolute coordinates. Put its
+        # existing controls into a central layout before adding dock widgets.
+        for child in form.findChildren(QtWidgets.QWidget):
+            if child.objectName():
+                setattr(self, child.objectName(), child)
+        self.remove_next_script_button.hide()
+        self.set_stop_request_button.hide()
+        layout = QtWidgets.QVBoxLayout(form)
+        readouts = QtWidgets.QGridLayout()
+        pairs = (
+            ("current_local_oscillator_freq_label", "current_local_oscillator_freq_text_field"),
+            ("current_local_oscillator_freq_label_3", "mw_mixing_frequency_text_field"),
+            ("current_local_oscillator_freq_label_5", "mw_transition_frequency_text_field"),
+            ("current_local_oscillator_freq_label_2", "current_local_oscillator_freq_p1_text_field"),
+            ("current_local_oscillator_freq_label_4", "mw_mixing_frequency_p1_text_field"),
+            ("current_local_oscillator_freq_label_6", "mw_transition_frequency_p1_text_field"),
+            ("current_local_oscillator_freq_label_7", "zero_field_splitting_text_field"),
+            ("ple_A1_label", "ple_A1_text_field"),
+            ("ple_A2_label", "ple_A2_text_field"),
+        )
+        for index, (label, field) in enumerate(pairs):
+            row, column = divmod(index, 3)
+            readouts.addWidget(getattr(self, label), 2 * row, column)
+            editor = getattr(self, field)
+            editor.setMaximumHeight(38)
+            readouts.addWidget(editor, 2 * row + 1, column)
+        layout.addLayout(readouts)
+        layout.addWidget(self.script_queue_table, 1)
 
 class TransitionTrackerGui(GuiBase):
     transition_tracker_logic = Connector(interface="TransitionTracker") #class name
@@ -45,15 +75,30 @@ class TransitionTrackerGui(GuiBase):
 
         self._mw = TransitionTrackerMainWindow()
         self._transition_tracker = self.transition_tracker_logic()
+        if self._transition_tracker.electron_spin == 0.5:
+            self._mw.setWindowTitle("SnV transition tracker — e1 / e2")
+            for name in ("current_local_oscillator_freq_label_2", "current_local_oscillator_freq_label_4",
+                         "current_local_oscillator_freq_label_6", "current_local_oscillator_freq_label_7",
+                         "current_local_oscillator_freq_p1_text_field", "mw_mixing_frequency_p1_text_field",
+                         "mw_transition_frequency_p1_text_field", "zero_field_splitting_text_field",
+                         "current_local_oscillator_freq_label_5", "mw_transition_frequency_text_field"):
+                getattr(self._mw, name).hide()
+            self._mw.current_local_oscillator_freq_label_3.setText("e1 ↔ e2 OPX IF (MHz)")
+            self._mw.current_local_oscillator_freq_label.setText("SMIQ LO (MHz)")
+            self._mw.current_local_oscillator_freq_text_field.setReadOnly(True)
+            self._mw.current_local_oscillator_freq_text_field.setToolTip(
+                "Applied SMIQ LO. Edit the next experiment's default in OPX setup parameters / SMIQ."
+            )
+            self._mw.mw_mixing_frequency_text_field.setReadOnly(True)
+        self._setup_dock = SetupParametersDock(self._transition_tracker, self._mw)
+        self._mw.addDockWidget(QtCore.Qt.RightDockWidgetArea, self._setup_dock)
+        self._mw.menuBar().addMenu("View").addAction(self._setup_dock.toggleViewAction())
         self._mw.setObjectName("window")
-        self._mw.resize(760, 793)
+        self._mw.resize(1280, 850)
         self._mw.setWindowOpacity(1.0)
         self._mw.setAutoFillBackground(False)
         #self.button = QtWidgets.QPushButton('start')
         #self._mw.addItem(self.button)
-        self.remove_next_script_button = QtWidgets.QPushButton(self._mw)
-        self.remove_next_script_button.setGeometry(QtCore.QRect(680, 970, 761, 31))
-        self.remove_next_script_button.setObjectName("remove_next_script_button")
         # self.script_queue_table = QTableWidgetEnhancedDrop(self._mw)
         # self.script_queue_table.setEnabled(True)
         # self.script_queue_table.setGeometry(QtCore.QRect(10, 220, 731, 561))
@@ -151,6 +196,8 @@ class TransitionTrackerGui(GuiBase):
         self._transition_tracker.update_tt_electron_gui.connect(self.update_gui_electron)
         self._transition_tracker.update_tt_nuclear_gui.emit()
         self._transition_tracker.update_tt_electron_gui.emit()
+        self._mw.show()
+        self._mw.resizeDocks([self._setup_dock], [600], QtCore.Qt.Horizontal)
 
         #self.retranslateUi(self._mw)
         #QtCore.QMetaObject.connectSlotsByName(self._mw)
@@ -164,10 +211,19 @@ class TransitionTrackerGui(GuiBase):
 
 
     def on_deactivate(self):
+        self._setup_dock.disconnect_tracker()
+        self._transition_tracker.update_tt_nuclear_gui.disconnect(self.update_gui_nuclear)
+        self._transition_tracker.update_tt_electron_gui.disconnect(self.update_gui_electron)
         self._mw.close()
         #TODO - clean the memory
 
     def update_gui_electron(self):
+        if self._transition_tracker.electron_spin == 0.5:
+            self._mw.current_local_oscillator_freq_text_field.setText("{:.10f}".format(self._transition_tracker.current_local_oscillator_freq))
+            self._mw.mw_mixing_frequency_text_field.setText("{:.6f}".format(self._transition_tracker.snv_frequency_mhz))
+            self._mw.ple_A2_text_field.setText("{:.10f}".format(self._transition_tracker.ple_A2))
+            self._mw.ple_A1_text_field.setText("{:.10f}".format(self._transition_tracker.ple_A1))
+            return
         self._mw.current_local_oscillator_freq_text_field.setText("{:.10f}".format(self._transition_tracker.current_local_oscillator_freq))
         self._mw.current_local_oscillator_freq_p1_text_field.setText("{:.10f}".format(self._transition_tracker.current_local_oscillator_freq_p1))
         self._mw.mw_mixing_frequency_text_field.setText("{:.10f}".format(self._transition_tracker.mw_mixing_frequency_C))
@@ -184,6 +240,8 @@ class TransitionTrackerGui(GuiBase):
 
     def update_gui_nuclear(self):
         column_names = ['name', 'current_frequency', 'ms_state', 'spin_type', 'start_level', 'end_level']
+        if self._transition_tracker.electron_spin == 0.5:
+            column_names[2] = 'electron_state'
         print('update gui nulcear Transition Tracker')
         self._mw.script_queue_table.setColumnCount(len(column_names))
         self._mw.script_queue_table.clearSelection()

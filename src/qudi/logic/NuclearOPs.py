@@ -28,10 +28,6 @@ simulation_config = SimulationConfig(duration=1_000)  # In clock cycles = 4ns
 
 from numbers import Number
 
-import qudi.UserScripts.helpers.snippets_awg_OPX as snippets_awg
-
-importlib.reload(snippets_awg)
-
 # TODO replace import with a connector to that
 import base64
 import hashlib
@@ -357,11 +353,28 @@ class NuclearOPs(DataGeneration):
         """Return how many scalar result fields are produced by the trace analysis."""
         return self.ana_trace.number_of_results
 
+    @property
+    def setup_parameters(self):
+        snapshot = getattr(self, "_setup_parameters", None)
+        return snapshot if snapshot is not None else self.queue.transition_tracker.setup_parameters
+
+    def capture_setup_parameters(self):
+        """Call before script settings so scan defaults and QUA use one snapshot."""
+        self._setup_parameters = self.queue.transition_tracker.setup_parameters
+        return self._setup_parameters
+
+    def report_data_progress(self, phase, **values):
+        signal = getattr(self.queue, "acquisition_progress", None)
+        if signal is not None:
+            signal.emit(dict(phase=phase, **values))
+
     def run(self, *args: Any, **kwargs: Any) -> None:
         """Start either the normal measurement thread or the debug sequence."""
         # Rebuild each parameter-specific program once per script start. Older
         # programs stay registered, but are not eligible for reuse in this run.
         self._rf_sequence_names_this_run = set()
+        self.report_data_progress("preparing")
+        self.queue.nuclear_ops_opx_utils.set_setup_parameters(self.setup_parameters)
         self._md = self.queue.awg.mcas_dict
         if getattr(self, "debug_mode", False):
             # self.run_debug_sequence(*args, **kwargs)
@@ -375,22 +388,40 @@ class NuclearOPs(DataGeneration):
             # Whats difference between envs/qudi/lib/threading and envs/qudi/lib/subprocess?
             # self.run_measurement(*args, **kwargs)
 
-    def checktime(self, abort: Any) -> None:
-        """Pause execution during the configured nightly quiet-time window."""
-        idx = 0
-        t = datetime.datetime.now()
-        current_time = int(t.hour) + int(t.minute) / 60
-        while current_time > self.start_pause_time and current_time < self.end_pause_time:
-            if abort.is_set():
+    def checktime(self, abort: Any) -> bool:
+        """Wait within the daily local-time window; return whether we waited.
+
+        Bounds are decimal hours (1.75 = 01:45), start inclusive and end
+        exclusive. Overnight windows are supported; equal bounds disable the
+        pause. Acquisition blocks already running are allowed to finish.
+        """
+        start, end = float(self.start_pause_time), float(self.end_pause_time)
+        if not all(np.isfinite(value) and 0 <= value <= 24 for value in (start, end)):
+            raise ValueError("Pause times must be finite decimal hours between 0 and 24")
+        start, end = start % 24, end % 24
+        waited = False
+        while start != end and not abort.is_set():
+            now = datetime.datetime.now()
+            hour = (now.hour + now.minute / 60 + now.second / 3600
+                    + now.microsecond / 3_600_000_000)
+            inside = start <= hour < end if start < end else hour >= start or hour < end
+            if not inside:
                 break
-            QtTest.QTest.qSleep(1000)
-            if idx == 0:
-                print("3 am pause. Good night, rest well.")
-                idx += 1
-            t = datetime.datetime.now()
-            current_time = int(t.hour) + int(t.minute) / 60
-        if idx > 0:
-            print("Continue after sleeping")
+            if not waited:
+                resume = (datetime.datetime.combine(now.date(), datetime.time())
+                          + datetime.timedelta(hours=end))
+                if resume <= now:
+                    resume += datetime.timedelta(days=1)
+                message = f"Scheduled pause until {resume:%Y-%m-%d %H:%M:%S} (local time)"
+                self.queue.log.info(message)
+                self.report_data_progress("paused", message=message)
+                waited = True
+            # Event.wait releases the thread and wakes immediately on Stop.
+            abort.wait(timeout=1)
+        if waited and not abort.is_set():
+            self.queue.log.info("Resuming NuclearOps after scheduled pause")
+            self.report_data_progress("preparing")
+        return waited
 
     def check_manual_pause(self, abort: Any) -> None:
         """Wait while manual pause is enabled unless an abort is requested."""
@@ -441,8 +472,13 @@ class NuclearOPs(DataGeneration):
                     if abort.is_set():
                         break
 
+                    self.report_data_progress("preparing")
+
                     # we can pause the mesurement by setting the variable self.manual_pause to True, setting it to False will continue the measurement
                     self.check_manual_pause(abort)
+                    self.checktime(abort)
+                    if abort.is_set():
+                        break
 
                     # updates click channel for gated counter if defined
                     if "click_channel" in self.current_iterator_df.keys():
@@ -486,6 +522,15 @@ class NuclearOPs(DataGeneration):
 
                     if abort.is_set():
                         break
+
+                    # Refocusing/compilation may have crossed the pause start.
+                    # After an overnight wait, repeat preparation so refocus is
+                    # fresh rather than starting with yesterday's laser lock.
+                    waited = self.checktime(abort)
+                    if abort.is_set():
+                        break
+                    if waited:
+                        continue
 
                     # Save relevant data from transition tracker to data set
                     self.data.set_observations(
@@ -591,6 +636,8 @@ class NuclearOPs(DataGeneration):
                 if hasattr(self, "_pld"):
                     self.pld.new_data_arrived()
                     self.queue.log.info("Cun: New data arrived")
+                    if not abort.is_set():
+                        self.report_data_progress("data_arrived")
 
                 if abort.is_set():
                     break
@@ -599,12 +646,10 @@ class NuclearOPs(DataGeneration):
 
         except Exception as e:
             self.queue.log.error("cun ERROR: Nuclear op failed in run measurement: %s", e)
+            self.report_data_progress("failed", message=str(e))
             abort.set()
             self.update_current_str()
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            raise exc_type(e)
-            # traceback.print_exception(exc_type, exc_value, exc_tb)
-            # self.update_current_str()
+            raise
         finally:
             self.state = "idle"
             self.mark_completed_rows_done()
@@ -614,7 +659,8 @@ class NuclearOPs(DataGeneration):
             self.pld.new_data_arrived()
             self.update_current_str()
             if self.session_meas_count == 0:
-                self.pld.gui.close_gui()
+                if hasattr(self.pld, "_gui"):
+                    self.pld.gui.close_gui()
                 if hasattr(self.data, "init_from_file") and self.data.init_from_file is not None:
                     self.move_init_from_file_folder_back()
 
@@ -622,10 +668,13 @@ class NuclearOPs(DataGeneration):
                 os.rmdir(self.save_dir)
 
             self.queue.log.info("cun: Finished function run_measurement")
-            if len(self.data.df) > 0:
-                self.save()
-
-            self.stop_laser_lock()
+            try:
+                if len(self.data.df) > 0:
+                    self.save()
+            finally:
+                self.stop_laser_lock()
+                if abort.is_set():
+                    self.report_data_progress("stopped")
 
     @property
     def session_meas_count(self) -> int:
@@ -926,6 +975,15 @@ class NuclearOPs(DataGeneration):
                 microwave.cw_on()
 
         self.queue.log.info(f"Set SMIQ frequency to {smiq_freq:.9e} Hz")
+        self.update_tracker_smiq_frequency(smiq_freq)
+
+    def update_tracker_smiq_frequency(self, frequency_hz: float) -> None:
+        """Record the applied SnV LO in the tracker's MHz metadata/readout."""
+        tracker = getattr(self.queue, "transition_tracker", None)
+        if tracker is not None and getattr(tracker, "electron_spin", None) == 0.5:
+            frequency_mhz = float(frequency_hz) / 1e6
+            if tracker.current_local_oscillator_freq != frequency_mhz:
+                tracker.current_local_oscillator_freq = frequency_mhz
 
     def mark_completed_rows_done(self) -> None:
         """Keep completed measurements when final cleanup runs before another iterator step."""
@@ -965,7 +1023,7 @@ class NuclearOPs(DataGeneration):
             )
             return
 
-        smiq_params = snippets_awg.SMIQ_PARAMS()
+        smiq_params = self.setup_parameters.smiq
         target_frequency_hz = float(smiq_params.frequency_ghz) * 1e9
         target_power_dbm = float(smiq_params.power_dbm)
         microwave = self.queue.mw_source_smiq
@@ -1013,6 +1071,7 @@ class NuclearOPs(DataGeneration):
         if microwave.module_state() == "idle":
             microwave.cw_on()
             self.queue.log.info("Turned fixed SMIQ CW output on.")
+        self.update_tracker_smiq_frequency(target_frequency_hz)
 
     def ramp_magnet(self) -> None:
         """Ramp the magnet to the field vector requested by the current iterator row."""
@@ -1109,13 +1168,13 @@ class NuclearOPs(DataGeneration):
         q.awg.run_cw_mode()
         # q.awg.stop_awgs()
 
-        if not snippets_awg.PLE_REFOCUS_PARAMS.use_gui_powers:
+        if not self.setup_parameters.ple_refocus.use_gui_powers:
             q.ao.set_setpoint("Laser_620", RESONANT_POWER_NW * 1e-9)  # nW -> W
             q.ao.set_setpoint(
-                "Laser_620_pi", snippets_awg.PLE_REFOCUS_PARAMS.laser_power_B2 * 1e-9
+                "Laser_620_pi", self.setup_parameters.ple_refocus.laser_power_B2 * 1e-9
             )  # nW -> W
             q.ao.set_setpoint(
-                "Laser_520", snippets_awg.PLE_REFOCUS_PARAMS.laser_power_repump * 1e-9
+                "Laser_520", self.setup_parameters.ple_refocus.laser_power_repump * 1e-9
             )  # nW -> W
         time.sleep(0.1)
 
@@ -1292,20 +1351,20 @@ class NuclearOPs(DataGeneration):
         # q.awg.stop_awgs()
         self.stop_laser_lock()
 
-        if not snippets_awg.PLE_REFOCUS_PARAMS.use_gui_powers:
+        if not self.setup_parameters.ple_refocus.use_gui_powers:
             q.ao.set_setpoint(
-                "Laser_620", snippets_awg.PLE_REFOCUS_PARAMS.laser_power_A1 * 1e-9
+                "Laser_620", self.setup_parameters.ple_refocus.laser_power_A1 * 1e-9
             )  # nW -> W
             q.ao.set_setpoint(
-                "Laser_620_pi", snippets_awg.PLE_REFOCUS_PARAMS.laser_power_B2 * 1e-9
+                "Laser_620_pi", self.setup_parameters.ple_refocus.laser_power_B2 * 1e-9
             )  # nW -> W
             q.ao.set_setpoint(
-                "Laser_520", snippets_awg.PLE_REFOCUS_PARAMS.laser_power_repump * 1e-9
+                "Laser_520", self.setup_parameters.ple_refocus.laser_power_repump * 1e-9
             )  # nW -> W
         time.sleep(0.1)
 
         # Green repump
-        if snippets_awg.PLE_REFOCUS_PARAMS.do_green_repump:
+        if self.setup_parameters.ple_refocus.do_green_repump:
             q.do.set_state("Laser_520", "on")
             if not wait_or_abort(REPUMP_TIME_S):
                 q.do.set_state("Laser_520", "off")
@@ -1484,13 +1543,16 @@ class NuclearOPs(DataGeneration):
         # row and stored in the AWG/OPX dictionary under its generated name.
         self.queue.log.info("cun:setup_rf: Building fresh QUA program for this script run.")
         self.queue.awg.stop_awgs()
+        self.queue.nuclear_ops_opx_utils.set_setup_parameters(self.setup_parameters)
         self.queue.nuclear_ops_opx_utils.slow_changing_parameters = (
             self.slow_changing_parameters
         )
         self.queue.nuclear_ops_opx_utils.fast_changing_parameters = (
             self.fast_changing_parameters
         )
-        self.queue.nuclear_ops_opx_utils.create_fast_sweep_qua_arrays(current_iterator_df)
+        self.queue.nuclear_ops_opx_utils.create_fast_sweep_qua_arrays(
+            current_iterator_df, scales=getattr(self, "opx_fast_sweep_scales", None)
+        )
         self.mcas = self.ret_mcas(self, current_iterator_df)
         # Writing the sequence...
         # while self.mcas=='':
@@ -1635,6 +1697,7 @@ class NuclearOPs(DataGeneration):
                 Thread1 = threading.Thread(target=super().save, kwargs={"notify": False})
                 Thread1.start()
                 Thread1.join()
+            self.setup_parameters.save(os.path.join(self.save_dir, "setup_parameters.json"))
             try:
                 self.save_sequence_file()
                 self.queue.save_pi3diamond(destination_dir=self.save_dir)

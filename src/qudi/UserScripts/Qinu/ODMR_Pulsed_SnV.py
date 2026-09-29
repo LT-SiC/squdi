@@ -28,7 +28,7 @@ importlib.reload(OPX_utils)
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -48,10 +48,9 @@ def ret_ret_mcas(pdc):
         # SSR_state = current_iterator_df["SSR_state"].unique()[0]
         with qua.program() as myprog:
             ou.init_program()
+            sna.setup_laser_powers(mcas)
             ou.i_1 = declare(int)
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
+
             ou.pause(10_000)
             with infinite_loop_(), for_each_(ou.i_1, qua_array_1):
                 with for_each_(ou.i_2, qua_array_2):
@@ -86,7 +85,7 @@ def ret_ret_mcas(pdc):
 
 def settings(pdc={}):
     # ana_seq = [["init", "<", 1, 1, 0, 1], ["result", ">", 0, 1, 0, 1], ["init", ">", 3, 1, 0, 1]]
-    ana_seq = [["init", "<", 1, 1, 0, 1], ["result", ">", 1, 1, 0, 1], ["init", ">", 5, 1, 0, 1]]
+    ana_seq = [["init", "<", nuclear.setup_parameters.ssr.init_threshold, 1, 0, 1], ["result", ">", nuclear.setup_parameters.ssr.threshold, 1, 0, 1], ["init", ">", nuclear.setup_parameters.csr.csr_threshold, 1, 0, 1]]
     # ana_seq = [["result", ">", 1, 1, 0, 1]]
     # [["init", "<", 1, 1, 0, 1], ["result", ">", 3, 1, 0, 1], ["init", ">", 20, 1, 0, 1]]
     # what does each entry do?
@@ -104,7 +103,6 @@ def settings(pdc={}):
     nuclear.queue.awg._qm.set_digital_delay("Laser_520", "Laser", (235 + 100) * u.ns)
     nuclear.queue.awg._qm.set_digital_delay("Laser_450", "Laser", (580 + 100) * u.ns)
     nuclear.queue.awg._qm.set_digital_delay("Laser_620_pi", "ppg", 570 * u.ns)
-
 
     # mcas.qm.set_digital_delay("NV", "switch", (800) * u.ns + (1_015 - 200) * u.ns)
     # nuclear.queue.awg._qm.set_digital_delay("NV", "switch", (60) * u.ns + (1_015 - 200) * u.ns)
@@ -175,6 +173,7 @@ def settings(pdc={}):
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

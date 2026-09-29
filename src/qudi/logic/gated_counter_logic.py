@@ -58,6 +58,7 @@ class GatedCounter(GenericLogic):
     clear_plot_signal = PySide2.QtCore.Signal(int)
     update_plot_signal = PySide2.QtCore.Signal(list, list)
     sigTraceUpdated = pyqtSignal(list, list)
+    sigAcquisitionProgress = pyqtSignal(object)
     readout_interval = misc.ret_property_typecheck("readout_interval", Number)
     progress = misc.ret_property_typecheck("progress", int)
 
@@ -461,6 +462,8 @@ class GatedCounter(GenericLogic):
         number_of_subtraces = len(self.trace.analyze_sequence)
 
         print("GC: count started")
+        self.progress = 0
+        self.sigAcquisitionProgress.emit(dict(phase="preparing", completed=0, total=int(self.n_values)))
         if hasattr(self, "_gui"):
             self.clear_plot_signal.emit(number_of_subtraces)
         try:
@@ -472,6 +475,8 @@ class GatedCounter(GenericLogic):
 
             mcas.run()
             self.progress = 0
+            self.sigAcquisitionProgress.emit(dict(phase="acquiring", completed=0,
+                                                 total=int(self.n_values), estimated=True))
             i = 0
             last_live_update_time = 0
             while True:
@@ -499,10 +504,15 @@ class GatedCounter(GenericLogic):
                     time.sleep(0.1)
                     # QtTest.QTest.qSleep(100)
             self.read_trace()
+            if abort.is_set():
+                self.sigAcquisitionProgress.emit(dict(phase="stopped"))
+            else:
+                self.set_progress()
             self.update_plot()
 
         except Exception as e:
             print(e)
+            self.sigAcquisitionProgress.emit(dict(phase="failed", message=str(e)))
             abort.set()
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
@@ -609,17 +619,15 @@ class GatedCounter(GenericLogic):
         print("GC: set_counter finished.")
 
     def set_progress(self):
-        if self._all_counters_ready():
+        ready = self._all_counters_ready()
+        if ready:
             self.progress = int(len(self.gated_counter_data))
         else:
-            if len(self.gated_counter_data) == 0:
-                self.progress = 0
-                return
             nonzero_indices = np.flatnonzero(self.gated_counter_data != 0)
-            if len(nonzero_indices) == 0:
-                self.progress = 0
-                return
-            self.progress = int(nonzero_indices[-1] + 1)
+            self.progress = int(nonzero_indices[-1] + 1) if len(nonzero_indices) else 0
+        self.sigAcquisitionProgress.emit(dict(
+            phase="processing" if ready else "acquiring", completed=self.progress,
+            total=int(len(self.gated_counter_data)), estimated=not ready))
 
     def init_plot(self):
         if hasattr(self, "_gui"):

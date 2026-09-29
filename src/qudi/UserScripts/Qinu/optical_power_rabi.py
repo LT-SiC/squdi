@@ -2,6 +2,7 @@ import importlib
 import os
 from collections import OrderedDict
 
+import numpy as np
 import qudi.hardware.OPX.program_container as pc
 import qudi.UserScripts.helpers.sequence_creation_helpers as sch
 import qudi.UserScripts.helpers.shared as ush
@@ -29,7 +30,7 @@ importlib.reload(OPX_utils)
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -48,25 +49,25 @@ def ret_ret_mcas(pdc):
             i = qua.declare(int)
             qua.assign(i, 5)
             ou.init_program()
+            sna.setup_laser_powers(mcas)
             ou.set_laser_power("Laser_620_pi", "Laser_620_pi_power")
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
+
             ou.pause(10_000)
             with infinite_loop_():
                 with for_(*from_array(ou.i_1, qua_array_1)):
                     with for_(*from_array(ou.i_2, qua_array_2)):
-                        with qua.if_(i >= 5):
+                        with qua.if_(i >= 50):
                             sna.crc(mcas, set_laser_power=False)
                             ### Init in e1 or e2 ###
                             qua.assign(i, 0)
                             ou.pause(200)
 
                         sna.electron_init(mcas=mcas, state=init_state, set_laser_power=False)
-                        # sna.ssr(mcas, state="e2" if init_state == "e1" else "e1", set_laser_power=False)
+                        sna.ssr(mcas, state="e2" if init_state == "e1" else "e1", set_laser_power=False)
+                        ou.pause(100)
                         sna.optical_pi_pulse(
                             mcas,
-                            couting_duration=60,
+                            couting_duration=50,
                             set_laser_power=False,
                         )
                         qua.assign(i, i + 1)
@@ -80,7 +81,9 @@ def ret_ret_mcas(pdc):
 
 def settings(pdc={}):
     # ana_seq = [["init", "<", 1, 1, 0, 1], ["result", ">", 0, 1, 0, 1], ["init", ">", 20, 1, 0, 1]]
-    ana_seq = [["result", ">", 0, 1, 0, 1], ["init", ">", 3, 1, 0, 1]]
+    ana_seq = [["init", "<", nuclear.setup_parameters.ssr.init_threshold, 1, 0, 1],
+                               ["result", ">", 0, 1, 0, 1], 
+                               ["init", ">", nuclear.setup_parameters.csr.csr_threshold, 1, 0, 1]]
 
     # ana_seq = [["result", ">", 0, 1, 0, 1]]
     # [["init", "<", 1, 1, 0, 1], ["result", ">", 3, 1, 0, 1], ["init", ">", 20, 1, 0, 1]]
@@ -92,8 +95,8 @@ def settings(pdc={}):
     # ana_seq[4]: set to 100 --> no counts measured; set to 7 --> counts can be measured; --> delta - exclusion zone. n > threshold +delta, or n< threhold - delta.
     # ana_seq[5]: "number of results" --> ssr = cnot1 + laser1 + cnot2 + laser2, -> n=2, etc.. laser2-laser1,  histograms are centered around 0,
 
-    nuclear.queue.awg._qm.set_digital_delay("Gate_Trigger", "trigger", 805 * u.ns)  # 805 # 820
-    nuclear.queue.awg._qm.set_digital_delay("Memory_Trigger", "trigger", 805 * u.ns)  # 805 # 820
+    nuclear.queue.awg._qm.set_digital_delay("Gate_Trigger", "trigger", 823* u.ns)  # 805 # 823 for PSB
+    nuclear.queue.awg._qm.set_digital_delay("Memory_Trigger", "trigger", 823 * u.ns)  # 805  # 823 for PSB
     nuclear.queue.awg._qm.set_digital_delay("Laser_620_det", "marker", (248 + 100) * u.ns)
     nuclear.queue.awg._qm.set_digital_delay("Laser_620", "marker", (150 + 100) * u.ns)
     nuclear.queue.awg._qm.set_digital_delay("Laser_520", "AOM", (235 + 100) * u.ns)
@@ -117,17 +120,17 @@ def settings(pdc={}):
     nuclear.save_trace_efficient = True
 
     # PLE refocus
-    nuclear.do_ple_refocus_A1 = True
+    nuclear.do_ple_refocus_A1 = False
     nuclear.lock_laser_to_wavemeter = True
     nuclear.ple_refocus_interval = 3 * 60
 
     nuclear.queue.gated_counter.trace.consecutive_valid_result_numbers = [0]
     nuclear.queue.gated_counter.trace.average_results = False
 
-    nr_repeating_intergration: int = 50_000
+    nr_repeating_intergration: int = 30_000
 
     # B_amp = np.arange(200, 300, 5)  # mT
-    pi_pulse_laser_power = np.linspace(10, 244, 20) ** 2  # nW
+    pi_pulse_laser_power = np.linspace(11, 290, 20) ** 2  # nW
     # pi_pulse_laser_power = np.linspace(1000, 200_000, 30)  # nW
     nuclear.parameters = OrderedDict(
         (
@@ -136,12 +139,12 @@ def settings(pdc={}):
             # ("B_amp", B_amp),
             ("sweeps", range(100)),
             ("click_channel", [2]),
-            ("init_state", ["e1"]),
+            ("init_state", (["e1", "e2"], "slow")),
             # ("SSR_state", ["e1", "e2"]),
-            ("pulse_shape_ppg", ["gaussian"]),
-            ("pulse_width_ppg", [2]),
-            ("pulse_delay_ppg", [0]),  # ns
-            ("Laser_620_pi_power", [60_000]),
+            ("pulse_shape_ppg", (["gaussian"], "slow")),
+            ("pulse_width_ppg", ([2], "slow")),
+            ("pulse_delay_ppg", ([0], "slow")),  # ns
+            ("Laser_620_pi_power", (pi_pulse_laser_power, "slow")),
             # ("wait_between_SSR", [100]),  # ns
         )
     )
@@ -155,9 +158,11 @@ def settings(pdc={}):
     )
 
 
+
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

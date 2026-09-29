@@ -1,5 +1,4 @@
 import importlib
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -48,104 +47,31 @@ class QubitAxis(str, Enum):
     minus_y = "-y"
 
 
-class UpdateableDataclass:
-    """Small mixin that updates dataclass fields only for non-``None`` inputs."""
-
-    def update(self, **kwargs):
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(self, k, v)
-        return self
+# Setup defaults are owned by TransitionTracker. Helpers read the run snapshot
+# from mcas.ou.setup_parameters; explicit arguments remain local overrides.
 
 
-__pause_lp__: int = 1_000  # 10us #pause after laser power update
-__tt_trigg_len__: int = 20  # ns
+def setup_laser_powers(
+    mcas: MultiChSeq,
+    laser_power_A1=None,
+    laser_power_B2=None,
+    laser_power_repump=None,
+    laser_power_repump_450=None,
+) -> None:
+    """Set shared powers once, after init_program and before any QUA loops.
 
-GENERAL_POWER_A1 = 25  # nW # det
-GENERAL_POWER_B2 = 25  # nW
-
-
-@dataclass
-class SMIQ_PARAMS(UpdateableDataclass):
-    """Default fixed SMIQ local-oscillator settings for OPX IQ mixing."""
-
-    frequency_ghz: float = 4.0  # 3.9
-    power_dbm: float = -14
-    frequency_tolerance_hz: float = 1.0
-    power_tolerance_dbm: float = 0.01
-
-
-@dataclass
-class ELECTRON_PARAMS(UpdateableDataclass):
-    """Default parameters for charge-state readout (CSR) helper calls."""
-
-    electron_rabi_period: int = 208  # ns
-    electron_rabi_opx_amp: int = 100 # %
-    IQ_freq: int = int((221.1) * 1e6)
-
-
-
-@dataclass
-class CRC_PARAMS(UpdateableDataclass):
-    """Default parameters for charge-readout check (CRC) helper calls."""
-
-    laser_power_A1: float | str = GENERAL_POWER_A1  # 7  # nW
-    laser_power_B2: float | str = GENERAL_POWER_B2  # 7  # nW
-    laser_power_repump: float | str = 100_000  # nW
-    probe_len: int | str = int(200_000)  # ns # TODO: max 1ms otherwise parallel issues with counting
-    repump_len: int | str = 100_000  # ns
-    threshold: int | str = 7  # cts
-    threshold_repump: int | str = 2  # cts
-    wait_before_repump: int | str = int(200)  # ns
-    wait_after_repump: int | str = int(200)  # ns
-    max_attempts: int = 1000  # not used right now
-    SPCM_channel: str = "SPCM1"
-
-
-@dataclass
-class CSR_PARAMS(UpdateableDataclass):
-    """Default parameters for charge-state readout (CSR) helper calls."""
-
-    duration: int | str = CRC_PARAMS.probe_len  # ns
-    laser_power_A1: float | str = CRC_PARAMS.laser_power_A1  # nW
-    laser_power_B2: float | str = CRC_PARAMS.laser_power_B2  # nW
-    csr_threshold: int | str = CRC_PARAMS.threshold  # cts
-
-
-@dataclass
-class SSR_PARAMS(UpdateableDataclass):
-    """Default parameters for single-shot readout (SSR) helper calls."""
-
-    state: QubitState | str = QubitState.e1
-    duration: int | str = 400_000  # 50_000  # ns
-    laser_power_A1: float | str = GENERAL_POWER_A1  # 7  # nW # 620_det
-    laser_power_B2: float | str = GENERAL_POWER_B2  # 7  # nW # 620
-
-
-@dataclass
-class ELECTRON_INIT_PARAMS(UpdateableDataclass):
-    """Default parameters for resonant electron-state initialization."""
-
-    state: QubitState = QubitState.e1
-    duration: int = 600_000  # ns (1000 us)
-    laser_power_A1: float = GENERAL_POWER_A1  # 7  # nW # det
-    laser_power_B2: float = GENERAL_POWER_B2  # 7  # nW
-
-
-@dataclass
-class PLE_REFOCUS_PARAMS(UpdateableDataclass):
-    use_gui_powers: bool = False
-    do_green_repump: bool = True
-    laser_power_A1: float = GENERAL_POWER_A1  # 7 # nW
-    laser_power_B2: float = GENERAL_POWER_B2  # 7 # nW
-    laser_power_repump: float = 10e3
-
-
-@dataclass
-class OPTICAL_PI_PULSE_PARAMS(UpdateableDataclass):
-    """Default parameters for optical pi pulse."""
-    couting_duration: int = 30  # ns
-    laser_power: float = 50  # nW
+    Explicit arguments can override the startup values for a particular scan.
+    Optical-pi power is independent and is set by scripts that use that channel.
+    """
+    ou = mcas.ou
+    settings = ou.setup_parameters
+    ou.set_laser_power("Laser_620_det", settings.general.laser_power_A1 if laser_power_A1 is None else laser_power_A1)
+    ou.set_laser_power("Laser_620", settings.general.laser_power_B2 if laser_power_B2 is None else laser_power_B2)
+    ou.set_laser_power("Laser_520", settings.crc.laser_power_repump if laser_power_repump is None else laser_power_repump)
+    if settings.crc.repump_laser == "Laser_450":
+        ou.set_laser_power("Laser_450", settings.crc.laser_power_repump_450
+                           if laser_power_repump_450 is None else laser_power_repump_450)
+    ou.pause(settings.general.pause_after_power)
 
 
 def crc(
@@ -162,14 +88,18 @@ def crc(
     max_attempts: int | None = None,
     counts_st: Any | None = None,
     SPCM_channel: str | None = None,
-    set_laser_power: bool = True,
+    set_laser_power: bool = False,
+    laser_power_repump_450: float | str | None = None,
 ) -> None:
-    """Run a count-rate check loop with optional 520 nm repumping.
+    """Run a count-rate check loop with selectable 520 or 450 nm repumping.
 
     The routine measures counts on ``SPCM_channel`` and keeps probing with the
     620 nm laser until the measured counts exceed ``crc_threshold``. If the
-    count rate falls below ``crc_threshold_repump``, a 520 nm repump pulse is
-    inserted before the next attempt.
+    count rate falls below ``crc_threshold_repump``, a pulse on the tracker's
+    selected CRC repump laser is inserted before the next attempt.
+
+    Powers are left unchanged by default. Call ``setup_laser_powers`` once at
+    program startup, or explicitly pass ``set_laser_power=True`` for this call.
 
     Args:
         mcas: Sequence container that provides access to
@@ -180,6 +110,8 @@ def crc(
             or a QUA key resolved by the OPX helper utilities.
         laser_power_repump: Repump laser power for ``Laser_520`` in nW, or a QUA key
             resolved by the OPX helper utilities.
+        laser_power_repump_450: Repump power for ``Laser_450`` in nW, or a QUA key.
+            Power overrides are applied only with ``set_laser_power=True``.
         probe_len: Probe pulse length in ns, or a QUA key resolved by the OPX
             helper utilities.
         repump_len: Repump pulse length in ns, or a QUA key resolved by the
@@ -199,11 +131,12 @@ def crc(
     Returns:
         None. The function emits QUA instructions into the active program.
     """
-    params = CRC_PARAMS()
+    params = mcas.ou.setup_parameters.crc
     params.update(
         laser_power_A1=laser_power_A1,
         laser_power_B2=laser_power_B2,
         laser_power_repump=laser_power_repump,
+        laser_power_repump_450=laser_power_repump_450,
         probe_len=probe_len,
         repump_len=repump_len,
         threshold=crc_threshold,
@@ -222,9 +155,11 @@ def crc(
 
     ### Set laser powers ###
     if set_laser_power:
-        ou.set_laser_power("Laser_620_det", params.laser_power_A1, __pause_lp__)
-        ou.set_laser_power("Laser_620", params.laser_power_B2, __pause_lp__)
-        ou.set_laser_power("Laser_520", params.laser_power_repump, __pause_lp__)
+        ou.set_laser_power("Laser_620_det", params.laser_power_A1, mcas.ou.setup_parameters.general.pause_after_power)
+        ou.set_laser_power("Laser_620", params.laser_power_B2, mcas.ou.setup_parameters.general.pause_after_power)
+        repump_power = (params.laser_power_repump_450 if params.repump_laser == "Laser_450"
+                        else params.laser_power_repump)
+        ou.set_laser_power(params.repump_laser, repump_power, mcas.ou.setup_parameters.general.pause_after_power)
 
     ### Main Loop: Repeat until sufficient photon counts are detected ###
     with while_(ou.crc_counts < params.threshold):
@@ -244,7 +179,7 @@ def crc(
 
         # Apply repump if the count rate is too low
         with if_(ou.crc_counts < params.threshold_repump):
-            ou.laser_pulse("Laser_520", params.repump_len)
+            ou.laser_pulse(params.repump_laser, params.repump_len)
 
         # Potential safeguard against infinite looping (not implemented)
         assign(ou.crc_attempts, ou.crc_attempts + 1)
@@ -259,13 +194,14 @@ def csr(
     duration: int | str | None = None,
     laser_power_A1: float | str | None = None,
     laser_power_B2: float | str | None = None,  # nW
-    set_laser_power: bool = True,
+    set_laser_power: bool = False,
 ) -> None:
     """Run a charge-state readout pulse sequence on both transitions.
 
-    The helper sets the A1 and B2 probe powers, issues the standard gate
+    The helper issues the standard gate
     trigger, plays simultaneous red probe pulses on ``Laser_620`` and
     ``Laser_620_det``, and finally emits the memory trigger.
+    Powers are only changed when ``set_laser_power=True`` is explicitly passed.
 
     Args:
         mcas: Sequence container that provides access to
@@ -277,7 +213,7 @@ def csr(
     Returns:
         None. The function emits QUA instructions into the active program.
     """
-    params = CSR_PARAMS()
+    params = mcas.ou.setup_parameters.csr
     params.update(duration=duration, laser_power_A1=laser_power_A1, laser_power_B2=laser_power_B2)
 
     ou: NuclearOpsOPXUtils = mcas.ou
@@ -286,12 +222,12 @@ def csr(
         ou.set_laser_power(
             "Laser_620_det",
             params.laser_power_A1,
-            __pause_lp__,
+            mcas.ou.setup_parameters.general.pause_after_power,
         )
         ou.set_laser_power(
             "Laser_620",
             params.laser_power_B2,
-            __pause_lp__,
+            mcas.ou.setup_parameters.general.pause_after_power,
         )
 
     ou.gate_trigger()
@@ -306,13 +242,14 @@ def electron_init(
     state: QubitState | str | None = None,
     duration: int | str | None = None,
     laser_power_pump: float | str | None = None,
-    set_laser_power: bool = True,
+    set_laser_power: bool = False,
 ) -> None:
     """Initialize the electron spin into ``e1`` or ``e2`` with a red pump pulse.
 
     The selected state determines which resonant red transition is driven:
-    ``e1`` maps to ``Laser_620_det`` and ``e2`` maps to ``Laser_620``. The
-    helper updates the static laser power first and then plays the pump pulse.
+    ``e1`` maps to ``Laser_620`` and ``e2`` maps to ``Laser_620_det``. The
+    helper plays the pump pulse at the already configured power. Pass
+    ``set_laser_power=True`` to explicitly change power for this call.
 
     Args:
         mcas: Sequence container that provides access to
@@ -326,7 +263,7 @@ def electron_init(
         None. The function emits QUA instructions into the active program.
     """
 
-    params = ELECTRON_INIT_PARAMS()
+    params = mcas.ou.setup_parameters.electron_init
     params.update(state=state, duration=duration)
     ou: NuclearOpsOPXUtils = mcas.ou
 
@@ -337,7 +274,7 @@ def electron_init(
                 ou.set_laser_power(
                     laser_name="Laser_620",
                     power_nw=params.laser_power_B2,
-                    pause_after=__pause_lp__,
+                    pause_after=mcas.ou.setup_parameters.general.pause_after_power,
                 )
             # Drive transition B2
             ou.laser_pulse("Laser_620", params.duration)
@@ -348,7 +285,7 @@ def electron_init(
                 ou.set_laser_power(
                     laser_name="Laser_620_det",
                     power_nw=params.laser_power_A1,
-                    pause_after=__pause_lp__,
+                    pause_after=mcas.ou.setup_parameters.general.pause_after_power,
                 )
             # Drive transition A1
             ou.laser_pulse("Laser_620_det", params.duration)
@@ -363,18 +300,19 @@ def ssr(
     state: QubitState | str | None = None,
     duration: int | str | None = None,
     laser_power_probe: float | str | None = None,
-    set_laser_power=True,
+    set_laser_power=False,
 ) -> None:
     """Run single-shot readout on the selected red transition.
 
-    The helper sets the requested probe power, emits the standard gate trigger,
+    The helper emits the standard gate trigger,
     probes the selected optical transition, and then emits the memory trigger.
+    Powers are only changed when ``set_laser_power=True`` is explicitly passed.
 
     Args:
         mcas: Sequence container that provides access to
             :class:`NuclearOpsOPXUtils`.
-        state: Readout transition selector. ``e1`` maps to ``Laser_620`` and
-            ``e2`` maps to ``Laser_620_det``.
+        state: Readout transition selector. ``e1`` maps to ``Laser_620_det`` and
+            ``e2`` maps to ``Laser_620``.
         duration: Probe duration in ns.
         laser_power_probe: Optional probe power override in nW, or a QUA key
             for the selected transition.
@@ -383,7 +321,7 @@ def ssr(
         None. The function emits QUA instructions into the active program.
     """
 
-    params = SSR_PARAMS()
+    params = mcas.ou.setup_parameters.ssr
     params.update(state=state, duration=duration)
     ou: NuclearOpsOPXUtils = mcas.ou
 
@@ -394,7 +332,7 @@ def ssr(
                 ou.set_laser_power(
                     laser_name="Laser_620_det",
                     power_nw=params.laser_power_A1,
-                    pause_after=__pause_lp__,
+                    pause_after=mcas.ou.setup_parameters.general.pause_after_power,
                 )
             ou.gate_trigger()
             ou.laser_pulse("Laser_620_det", params.duration)
@@ -407,7 +345,7 @@ def ssr(
                 ou.set_laser_power(
                     laser_name="Laser_620",
                     power_nw=params.laser_power_B2,
-                    pause_after=__pause_lp__,
+                    pause_after=mcas.ou.setup_parameters.general.pause_after_power,
                 )
             ou.gate_trigger()
             ou.laser_pulse("Laser_620", params.duration)
@@ -421,12 +359,12 @@ def ssr(
 
 def optical_pi_pulse(
     mcas: MultiChSeq,
-    couting_duration: int = 16,  # ns
-    laser_power: float | str | None = 50,  # nW
-    set_laser_power=True,
+    couting_duration: int | None = None,  # ns
+    laser_power: float | str | None = None,  # nW
+    set_laser_power=False,
 ) -> None:
-    """Runs optical (pi) pulse acting on e1"""
-    params = OPTICAL_PI_PULSE_PARAMS()
+    """Run the optical pi pulse; leave its startup power unchanged by default."""
+    params = mcas.ou.setup_parameters.optical_pi_pulse
     params.update(
         couting_duration=couting_duration,
         laser_power=laser_power,
@@ -434,12 +372,12 @@ def optical_pi_pulse(
     ou: NuclearOpsOPXUtils = mcas.ou
     if set_laser_power:
         ou.set_laser_power(
-            laser_name="Laser_620_pi", power_nw=params.laser_power, pause_after=__pause_lp__
+            laser_name="Laser_620_pi", power_nw=params.laser_power, pause_after=mcas.ou.setup_parameters.general.pause_after_power
         )
     align()
     ou.gate_trigger()
     # ou.laser_pulse("Laser_620_pi", duration_ns=16)
-    ou.laser_pulse("Laser_620_pi", duration_ns=50)
+    ou.laser_pulse("Laser_620_pi", duration_ns=params.pulse_duration)
     ou.pause(params.couting_duration, align_before=False)
     ou.memory_trigger()
     align()
@@ -453,9 +391,15 @@ def electron_gate(
     gate: str | Gate,
     axis: str | QubitAxis = QubitAxis.x,
     electron_rabi_period: int | None = None,
-    electron_rabi_opx_amp: int | None = None
+    electron_rabi_opx_amp: int | None = None,
+    align_elements: bool = True,
 ):
-    params = ELECTRON_PARAMS()
+    """Play a gate, optionally synchronizing all elements around it.
+
+    Inside an MW-only strict-timing block use ``align_elements=False`` and
+    synchronize outside that block, before preparation/readout boundaries.
+    """
+    params = mcas.ou.setup_parameters.electron
     params.update(electron_rabi_period=electron_rabi_period, electron_rabi_opx_amp=electron_rabi_opx_amp)
     ou: NuclearOpsOPXUtils = mcas.ou
 
@@ -464,15 +408,19 @@ def electron_gate(
             pulse_duration = params.electron_rabi_period / 2
         case Gate.pi_half:
             pulse_duration = params.electron_rabi_period / 4
+        case _:
+            raise ValueError(f"Unknown electron gate: {gate!r}; use 'pi' or 'pi/2'.")
 
     pulse = axis.value if isinstance(axis, QubitAxis) else axis
     
-    align()
+    if align_elements:
+        align()
     ou.MW_pulse(duration_ns=pulse_duration, pulse=pulse, amplitude=params.electron_rabi_opx_amp/100)
-    align()
+    if align_elements:
+        align()
 
 def set_IQ_freq(mcas, IQ_freq: int | None = None):
-    params = ELECTRON_PARAMS()
+    params = mcas.ou.setup_parameters.electron
     params.update(IQ_freq=IQ_freq)
     update_frequency("MW", params.IQ_freq)
 

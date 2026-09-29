@@ -42,12 +42,10 @@ def ret_ret_mcas(pdc):
 
         with qua.program() as myprog:
             ou.init_program()
+            sna.setup_laser_powers(mcas)
             ou.i_1 = declare(int)
             ou.i_2 = declare(int)
 
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
             ou.pause(10_000)
 
             with infinite_loop_(), for_each_(ou.i_1, qua_array_1):
@@ -76,9 +74,9 @@ def ret_ret_mcas(pdc):
 def settings(pdc=None):
     pdc = {} if pdc is None else pdc
     ana_seq = [
-        qinu_common.init("<", threshold=1),
+        qinu_common.init("<", threshold=nuclear.setup_parameters.ssr.init_threshold),
         qinu_common.result(">", threshold=1),
-        qinu_common.init(">", threshold=10),
+        qinu_common.init(">", threshold=nuclear.setup_parameters.csr.csr_threshold),
     ]
 
     qinu_common.configure_experiment(
@@ -141,6 +139,7 @@ def start_smiq_cw() -> None:
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

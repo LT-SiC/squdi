@@ -293,10 +293,10 @@ class DataGeneration:
         t.append(time.time() - t0)
         if len(self.iterator_df_done) >= 0:
             if hasattr(self, "file_notes"):
-                with open("{}/notes.dat".format(self.save_dir), "w") as text_file:
+                with open("{}/notes.dat".format(self.save_dir), "w", encoding="utf-8") as text_file:
                     text_file.write(self.file_notes)
             if hasattr(self, "_meas_code"):
-                with open("{}/meas_code.py".format(self.save_dir), "w") as text_file:
+                with open("{}/meas_code.py".format(self.save_dir), "w", encoding="utf-8") as text_file:
                     text_file.write(self.meas_code)
             t.append(time.time() - t0)
             self.save_measurement_data(notify=notify)

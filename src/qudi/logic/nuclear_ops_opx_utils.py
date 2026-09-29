@@ -49,9 +49,8 @@ class NuclearOpsOPXUtils(LogicBase):
     and future OPX/QM helper wrappers can use to convert requested laser powers
     in nW into calibrated voltage or OPX amplitude values.
 
-    ``TransitionTracker`` is connected intentionally even though it is not used
-    yet. This keeps the integration point in place for future laser metadata or
-    experiment-parameter lookup without changing the queue wiring again.
+    ``TransitionTracker`` owns the setup defaults. NuclearOps supplies a detached
+    snapshot for each run, shared by QUA helpers and hardware/refocus setup.
 
     Timing convention:
         Public helper methods in this class accept durations in physical
@@ -59,7 +58,6 @@ class NuclearOpsOPXUtils(LogicBase):
         exactly once in :meth:`duration_ns_to_qua`.
     """
 
-    TT_TRIGGER_LENGTH_NS: int = 20  # ns
     LONG_PULSE_THRESHOLD_NS: int = 1_000_000  # ns (1ms)
     LONG_PULSE_CHUNK_NS: int = 5_000  # ns
     QUA_FIXED_MIN: float = -8.0
@@ -119,6 +117,7 @@ class NuclearOpsOPXUtils(LogicBase):
 
     def on_activate(self) -> None:
         """Resolve external logic and hardware connectors on activation."""
+        self._setup_parameters = None
         self._power_calibration_logic = self.power_calibration_logic()
         self._ple_scanner_logic = self.ple_scanner_logic()
         self._transition_tracker = self.transition_tracker_logic()
@@ -132,8 +131,22 @@ class NuclearOpsOPXUtils(LogicBase):
         self._ple_scanner_logic = None
         self._transition_tracker = None
         self._opx = None
+        self._setup_parameters = None
 
-    def create_fast_sweep_qua_arrays(self, current_iterator_df: pd.DataFrame):
+    @property
+    def setup_parameters(self):
+        snapshot = getattr(self, "_setup_parameters", None)
+        return snapshot if snapshot is not None else self._transition_tracker.setup_parameters
+
+    def set_setup_parameters(self, snapshot) -> None:
+        """Bind a run snapshot through the Qudi connector's public interface.
+
+        OverloadProxy cannot create attributes by assignment. Set the private
+        state on the module itself so first-run binding also works via a proxy.
+        """
+        self._setup_parameters = snapshot
+
+    def create_fast_sweep_qua_arrays(self, current_iterator_df: pd.DataFrame, scales=None):
         self.current_iterator_df = current_iterator_df
 
         self.fast_sweeps_qua = OrderedDict()
@@ -147,9 +160,10 @@ class NuclearOpsOPXUtils(LogicBase):
                 element = self._find_element_from_current_iterator(key)
                 quantity_kind = self._find_quantity_kind_from_current_iterator(key)
                 raw_array = np.asarray(current_iterator_df[key].unique())
-                qua_array, qua_type = self._prepare_fast_sweep_qua_array(
-                    self._get_qua_array(element, quantity_kind, raw_array)
-                )
+                values = self._get_qua_array(element, quantity_kind, raw_array)
+                if scales and key in scales:
+                    values = values * scales[key]
+                qua_array, qua_type = self._prepare_fast_sweep_qua_array(values)
                 self.sweep_keys_OPX.append(key)
                 self.fast_sweeps_qua[key] = FastSweepQUA(
                     element=element,
@@ -606,7 +620,7 @@ class NuclearOpsOPXUtils(LogicBase):
         play(
             pulse="trigit",
             element="Gate_Trigger",
-            duration=self.duration_ns_to_qua(self.TT_TRIGGER_LENGTH_NS),
+            duration=self.duration_ns_to_qua(self.setup_parameters.general.tt_trigger_length),
         )
 
     def memory_trigger(self) -> None:
@@ -614,7 +628,7 @@ class NuclearOpsOPXUtils(LogicBase):
         play(
             pulse="trigit",
             element="Memory_Trigger",
-            duration=self.duration_ns_to_qua(self.TT_TRIGGER_LENGTH_NS),
+            duration=self.duration_ns_to_qua(self.setup_parameters.general.tt_trigger_length),
         )
 
     def pause(

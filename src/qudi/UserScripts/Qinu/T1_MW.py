@@ -29,7 +29,7 @@ importlib.reload(OPX_utils)
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -49,27 +49,29 @@ def ret_ret_mcas(pdc):
         MW_pi_len = current_iterator_df["MW_pi_len"].unique()[0]
 
         #
-        # qua.update_frequency("NV", new_frequency=sna.ELECTRON_PARAMS.IQ_freq)
-        with qua.program() as myprog, infinite_loop_():
+        # qua.update_frequency("NV", new_frequency=ou.setup_parameters.electron.IQ_freq)
+        with qua.program() as myprog:
             ou.init_program()
-            ou.i_1 = declare(int)
-            qua.update_frequency("MW", MW_f)
-            ou.pause(500 // 4)
+            sna.setup_laser_powers(mcas)
+            with infinite_loop_():
+                ou.i_1 = declare(int)
+                qua.update_frequency("MW", MW_f)
+                ou.pause(500 // 4)
 
-            with for_each_(ou.i_1, qua_array_1), for_each_(ou.i_2, qua_array_2):
-                sna.crc(mcas)
-                sna.electron_init(
-                    mcas,
-                    init_state,
-                )
-                sna.ssr(mcas, state="e1" if init_state == "e2" else "e2")
-                qua.align()
-                ou.pause(1000)
-                if pi_bool == "mw_pi":
-                    qua.play("x" * qua.amp(MW_amp), "MW", duration=MW_pi_len * u.ns)
-                ou.pause("readout_delay")
-                sna.ssr(mcas, state=init_state)
-                sna.csr(mcas)
+                with for_each_(ou.i_1, qua_array_1), for_each_(ou.i_2, qua_array_2):
+                    sna.crc(mcas)
+                    sna.electron_init(
+                        mcas,
+                        init_state,
+                    )
+                    sna.ssr(mcas, state="e1" if init_state == "e2" else "e2")
+                    qua.align()
+                    ou.pause(1000)
+                    if pi_bool == "mw_pi":
+                        qua.play("x" * qua.amp(MW_amp), "MW", duration=MW_pi_len * u.ns)
+                    ou.pause("readout_delay")
+                    sna.ssr(mcas, state=init_state)
+                    sna.csr(mcas)
 
         mcas.program = myprog
         return mcas
@@ -79,9 +81,9 @@ def ret_ret_mcas(pdc):
 
 def settings(pdc={}):
     ana_seq = [
-        ["init", "<", 1, 1, 0, 1],
-        ["result", ">", 0, 1, 0, 1],
-        ["init", ">", 8, 1, 0, 1],
+        ["init", "<", nuclear.setup_parameters.ssr.init_threshold, 1, 0, 1],
+        ["result", ">", nuclear.setup_parameters.ssr.threshold, 1, 0, 1],
+        ["init", ">", nuclear.setup_parameters.csr.csr_threshold, 1, 0, 1],
     ]
     # what does each entry do?
     # ana_seq[0]: ? 'result' or 'init', init - for postselection
@@ -123,9 +125,9 @@ def settings(pdc={}):
             ("readout_delay", readout_delay),
             ("click_channel", [2]),  # nW
             ("init_state", ["e1"]),
-            ("MW_f", [sna.ELECTRON_PARAMS().IQ_freq]),
-            ("MW_amp", [1]),
-            ("MW_pi_len", [sna.ELECTRON_PARAMS().electron_rabi_period // 2]),
+            ("MW_f", [nuclear.setup_parameters.electron.IQ_freq]),
+            ("MW_amp", [nuclear.setup_parameters.electron.electron_rabi_opx_amp / 100]),
+            ("MW_pi_len", [nuclear.setup_parameters.electron.electron_rabi_period // 2]),
             ("pi_bool", ["mw_pi", "no_mw_pi"]),
         )
     )
@@ -142,6 +144,7 @@ def settings(pdc={}):
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

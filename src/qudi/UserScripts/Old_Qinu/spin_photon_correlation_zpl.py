@@ -32,7 +32,7 @@ importlib.reload(OPX_utils)
 u = unit(coerce_to_integer=True)
 seq_name = os.path.basename(__file__).split(".")[0]
 nuclear: NuclearOPs = sch.create_nuclear(__file__)
-with open(os.path.abspath(__file__).split(".")[0] + ".py", "r") as f:
+with open(os.path.abspath(__file__).split(".")[0] + ".py", "r", encoding="utf-8") as f:
     meas_code = f.read()
 
 
@@ -56,10 +56,9 @@ def ret_ret_mcas(pdc):
             crc_rep = declare(int)
             assign(crc_rep, crc_period)
             ou.init_program()
+            sna.setup_laser_powers(mcas)
             ou.set_laser_power("Laser_620_pi", "Laser_620_pi_power")
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
+
             ou.pause(10_000)
             with infinite_loop_():
                 with for_(*from_array(ou.i_1, qua_array_1)):
@@ -145,7 +144,7 @@ def settings(pdc={}):
             ("pulse_width_ppg", [2]),
             ("pulse_delay_ppg", [0]),
             ("init_state", ["e1", "e2"]),  # ns
-            ("Laser_620_pi_power", [6_000]),  # nW
+            ("Laser_620_pi_power", ([6_000], "slow")),  # nW
             # ("wait_between_SSR", [100]),  # ns
         )
     )
@@ -160,6 +159,7 @@ def settings(pdc={}):
 def run_fun(abort, **kwargs):
     print(1, "Nuclear started!!!")
     nuclear.queue = kwargs["queue"]
+    nuclear.capture_setup_parameters()
     nuclear.queue.gated_counter.readout_duration = 1 * 1e6
     nuclear.hashed = False
     nuclear.debug_mode = False

@@ -21,6 +21,7 @@ import pandas as pd
 import os
 import collections
 import logging
+from qudi.logic.transition_tracker_settings import SetupParameterStore, validate
 
 from PySide2.QtWidgets import QTableWidgetItem, QMainWindow
 from PySide2.QtCore import Signal as pyqtSignal
@@ -41,6 +42,7 @@ import datetime
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from qudi.core.connector import Connector
+from qudi.core.configoption import ConfigOption
 
 # from core.configoption import ConfigOption
 from qudi.logic.generic_logic import GenericLogic
@@ -53,7 +55,7 @@ import lmfit
 # single values
 ####################################################################################################################
 ###### app_dir = r'C:/src/qudi'
-app_dir = r"C:/Users/yy3/git/squdi/src/qudi"
+app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 log_dir = "{}/log/".format(app_dir)
 log_archive_dir = "{}/log/archive/".format(app_dir)
@@ -288,11 +290,11 @@ class RabiParametersStatic:
 
     def archive_file(self):
         filename = os.path.splitext(os.path.basename(self.filepath))[0]
-        fil = r"C:\src\qudi\log\transition_tracker_log\rabi_parameters_archive\{}".format(filename)
+        fil = os.path.join(os.path.dirname(self.filepath), "rabi_parameters_archive", filename)
         date = datetime.datetime.fromtimestamp(os.path.getmtime(self.filepath)).strftime("%Y%m%dh%Hm%Ms%S")
         if not os.path.isdir(fil):
-            os.mkdir(fil)
-        shutil.copy(self.filepath, r"C:\src\qudi\log\transition_tracker_log\rabi_parameters_archive\{}\{}-{}_{}.dat".format(filename, date, nowstr(), filename))
+            os.makedirs(fil)
+        shutil.copy2(self.filepath, os.path.join(fil, "{}-{}_{}.dat".format(date, nowstr(), filename)))
 
     def file_header(self, tnf):
         return ["amp{}".format(i) for i in range(tnf)] + ["transition", "omega", "date"]
@@ -436,9 +438,10 @@ class RabiParametersStatic:
             raise ValueError("Something is wrong either with the given value for tni. val: {}, tnf: {}".format(tni, self.tnf))
 
     def plot(self, **kwargs):
-        sample_amp = np.linspace(0.01, 1.0, 100)
-        mino = 0.0
-        maxo = self.omega(amplitude=[1.0])[0]
+        calibrated_amp, calibrated_omega = self.amp_rabi_freq
+        sample_amp = np.linspace(np.min(calibrated_amp), np.max(calibrated_amp), 100)
+        mino = np.min(calibrated_omega)
+        maxo = np.max(calibrated_omega)
         sample_omega = np.linspace(mino, maxo, 100)
         arf, orf = self.amp_rabi_freq
         eorf = self.omega(amplitude=sample_amp)
@@ -449,7 +452,7 @@ class RabiParametersStatic:
             fig, ax = plt.subplots(1, 2)
             ax0 = ax[0]
             ax1 = ax[1]
-            fig.canvas.set_window_title(self.transition_name)
+            fig.canvas.manager.set_window_title(self.transition_name)
             fig.suptitle(self.filename)
         elif len(kwargs) == 2:
             ax0 = kwargs["ax0"]
@@ -558,8 +561,9 @@ class Transition:
     def set_meta(self):
         name = TransitionTracker.correct_transition_name(self.name)
         self.nuc, ms = name.split(" ")
-        self.ms_state = float(ms[2:])
-        self.spin_type = "14n" if "14n" in self.nuc else "13c"  # Fixme should be 29si?
+        self.electron_state = ms
+        self.ms_state = {"e1": 0.5, "e2": -0.5}[ms] if ms in ("e1", "e2") else float(ms[2:])
+        self.spin_type = "14n" if "14n" in self.nuc else ("29si" if "29si" in self.nuc else "13c")
         if self.spin_type == "14n":
             self.start_angular_momentum, self.end_angular_momentum = sorted([0, int(self.nuc[-2:])])
         else:
@@ -572,7 +576,10 @@ class TransitionTracker(GenericLogic):
     c13_list = []  # ['13c5']#['13c414', '13c90', '13c13', '13c6', '13c-5', '13c-6']
     si29_list = []  # ['29si5']######          THIS MUST BE LOWERCASE !!!!!!!!!!!!!!!!!!!!!!!!
     transitions = misc.ret_property_array_like_typ("transitions", Transition)
-    log_folder = r"C:\src\qudi\log\transition_tracker_log"
+    log_folder = ConfigOption("log_folder", default=os.path.join(app_dir, "log", "transition_tracker_log"))
+    electron_spin = ConfigOption("electron_spin", default=1.5)
+    snv_magnetic_field = ConfigOption("snv_magnetic_field", default=None)
+    snv_initial_frequency_mhz = ConfigOption("snv_initial_frequency_mhz", default=221.1)
     g_factors = {"e": -2.0028 * 1.6021766208e-19 / (4 * np.pi * 9.10938356e-31) * 1e-6}  # why again? it is already in qutip enhanced.
 
     # transition_tracker_gui = Connector(interface="transition_tracker_gui")
@@ -584,12 +591,25 @@ class TransitionTracker(GenericLogic):
 
     update_tt_nuclear_gui = pyqtSignal()
     update_tt_electron_gui = pyqtSignal()  # is it connected?
+    setup_parameters_changed = pyqtSignal()
     Spin_Names_List = ["14N", "13C414", "13C90", "29Si8", "13C5", "29Si8.00", "29Si2.2", "29Si8.74"]
 
     def __init__(self, config, **kwargs):
         super().__init__(config=config, **kwargs)
 
     def on_activate(self):
+        if self.electron_spin not in (0.5, 1.5):
+            raise ValueError("electron_spin must be 0.5 (SnV) or 1.5 (legacy).")
+        self.c13_list, self.si29_list = [], []
+        self.Spin_Names_List = list(type(self).Spin_Names_List)
+        self._snv_frequency_mhz = float(self.snv_initial_frequency_mhz)
+        frequency_log = os.path.join(self.log_folder, "snv_odmr_frequency.dat")
+        settings_path = os.path.join(self.log_folder, "setup_parameters.json")
+        if self.electron_spin == 0.5 and not os.path.isfile(settings_path) and os.path.isfile(frequency_log):
+            self._snv_frequency_mhz = float(get_last_values_from_file(None, full_path=frequency_log)[0])
+        self._setup_store = SetupParameterStore(
+            settings_path, self._snv_frequency_mhz)
+        self._snv_frequency_mhz = self.setup_parameters.electron.IQ_freq / 1e6
         self.load_current_spin()
         self._awg = self.mcas_holder()
         # self._odmr_logic= self.odmr_logic()
@@ -600,9 +620,16 @@ class TransitionTracker(GenericLogic):
         # title = '' if title is None else title
         # self.setWindowTitle(title)
         self.reload_nuclear_parameters()
-        self.mw_mixing_frequency_L = get_last_value_from_file("mw_mixing_frequency_L")
-        self.mw_mixing_frequency_C = get_last_value_from_file("mw_mixing_frequency_C")
-        self.mw_mixing_frequency_R = get_last_value_from_file("mw_mixing_frequency_R")
+        if self.electron_spin == 0.5:
+            # Compatibility fields used by NuclearOps metadata, not three
+            # independent SnV transitions or inputs to a field inversion.
+            self._mw_mixing_frequency_L = self._snv_frequency_mhz
+            self._mw_mixing_frequency_C = self._snv_frequency_mhz
+            self._mw_mixing_frequency_R = self._snv_frequency_mhz
+        else:
+            self.mw_mixing_frequency_L = get_last_value_from_file("mw_mixing_frequency_L")
+            self.mw_mixing_frequency_C = get_last_value_from_file("mw_mixing_frequency_C")
+            self.mw_mixing_frequency_R = get_last_value_from_file("mw_mixing_frequency_R")
         self.ple_A2 = get_last_value_from_file("ple_A2")
         self.ple_A2_fit_params = get_last_value_from_file("ple_A2_fit_params")
         self.interferometer_fit_params = get_last_value_from_file("interferometer_fit_params")
@@ -612,9 +639,13 @@ class TransitionTracker(GenericLogic):
         self.ple_repump = get_last_value_from_file("ple_repump")  # we are not using itm  right?
 
         # self.xyz = pi3d.get_last_values_from_file('xyz')
-        self.current_local_oscillator_freq = get_last_value_from_file("current_local_oscillator_freq")  # also not using it.
+        if self.electron_spin == 0.5:
+            self.current_local_oscillator_freq = self.setup_parameters.smiq.frequency_ghz * 1e3
+        else:
+            self.current_local_oscillator_freq = get_last_value_from_file("current_local_oscillator_freq")
         self.zero_field_splitting = get_last_value_from_file("zfs")
-        self.transition_name_list = [["-1.5", "-0.5", "+0.5", "+1.5"]] + [["+0.5", "-0.5"]] * (len(self.c13_list) + len(self.si29_list))
+        electron_labels = ["e1", "e2"] if self.electron_spin == 0.5 else ["-1.5", "-0.5", "+0.5", "+1.5"]
+        self.transition_name_list = [electron_labels] + [["+0.5", "-0.5"]] * (len(self.c13_list) + len(self.si29_list))
         self.states_list = [range(len(i)) for i in self.transition_name_list]
         self.spin_name_list = ["e"] + self.c13_list + self.si29_list
         self.set_h_diag()
@@ -630,11 +661,14 @@ class TransitionTracker(GenericLogic):
         pass
 
     def load_current_spin(self):
-        File = r"log\transition_tracker_log\current_n_spins.csv"
-        spins = np.loadtxt(os.path.join(app_dir, File), dtype=str).tolist()
+        File = os.path.join(self.log_folder, "current_n_spins.csv")
+        with open(File, encoding="utf-8") as stream:
+            spins = stream.read().strip().replace("\n", ",")
         if len(spins) > 0:
             for spin in spins.split(","):
-                spin = str(spin)
+                spin = str(spin).strip()
+                if not spin:
+                    continue
                 if "si" in spin.lower():
                     self.si29_list.append(spin.lower())
                 else:
@@ -649,8 +683,8 @@ class TransitionTracker(GenericLogic):
                 return
             spins.append(spin_name.replace("si", "Si").replace("c", "C").replace("MHz", ""))
 
-        folder = os.path.join(app_dir, r"log\transition_tracker_log")
-        File = os.path.join(folder, r"\current_n_spins.csv")
+        folder = self.log_folder
+        File = os.path.join(folder, "current_n_spins.csv")
         np.savetxt(File, spins, fmt="%s")
         for i, spin_name in enumerate(spins):
             hf_p_file = folder + r"\hf_" + spin_name + ".dat"
@@ -663,6 +697,12 @@ class TransitionTracker(GenericLogic):
             np.savetxt(hf_o_file, [txt_o], fmt="%s")
             np.savetxt(hf_p_file, [txt_p], fmt="%s")
 
+            if self.electron_spin == 0.5:
+                from qudi.logic.snv_calibration import ensure_dummy_rabi_log
+                for state in ("e1", "e2"):
+                    ensure_dummy_rabi_log(folder, f"{spin_name.lower()} {state}")
+                continue
+
             # create the nuclear rabi files, they are just copies of one example, in order to not get an error on startup of qudi, so no real data
             for i in np.arange(-1.5, 2.5, 1):
                 original = f"29si8.74 ms{i}_rabi.dat"
@@ -673,6 +713,9 @@ class TransitionTracker(GenericLogic):
 
                 shutil.copy(os.path.join(folder, original), os.path.join(folder, copy))
 
+        if self.electron_spin == 0.5:
+            self.log.info("Restart the transition tracker to load the new e1/e2 nuclear spins.")
+            return
         script_folder = r"C:\src\qudi\notebooks\UserScripts"
         shutil.copytree(os.path.join(script_folder, "8MHz"), os.path.join(script_folder, f"{str(spin_names).replace('.',',')}"[2:-2]))
 
@@ -818,6 +861,8 @@ class TransitionTracker(GenericLogic):
         ms = self.transition_name_list[0][transition[0][0]]
         fsn = flipped_spin_numbers(transition)[0]
         nuc = self.spin_name_list[fsn]  # nuc = 29si8 ms = +1.5
+        if self.electron_spin == 0.5:
+            return "{} {}".format(nuc, ms)
         if ms == "0" and "13c" in nuc:  # no there is never happens here. basically all are at larmor.
             return "13c ms0"
         else:
@@ -886,11 +931,16 @@ class TransitionTracker(GenericLogic):
         )
 
     def set_h_diag(self):
+        if self.electron_spin == 0.5 and self.snv_magnetic_field is None:
+            # An OPX intermediate frequency does not determine the SnV field.
+            self.h_diag = None
+            return
         self.nvham = NVHam(
-            magnet_field={"z": self.current_magnetic_field},
+            magnet_field=self.snv_magnetic_field if self.electron_spin == 0.5 else {"z": self.current_magnetic_field},
             n_type=None,
             nitrogen_levels=[],
-            electron_levels=[0, 1, 2, 3],
+            electron_levels=list(range(int(2*self.electron_spin+1))),
+            electron_spin=self.electron_spin,
             gamma=self.g_factors,
             qp=self.qp,
             hf_para_n=self.hf_para_n,
@@ -915,18 +965,32 @@ class TransitionTracker(GenericLogic):
                 Transition(
                     parent=self,
                     name=key,
-                    current_frequency=-get_transition_frequency(h_diag=self.h_diag, dims=self.nvham.dims, transition=val),  # fixme get it right
+                    current_frequency=(float("nan") if self.h_diag is None else -get_transition_frequency(h_diag=self.h_diag, dims=self.nvham.dims, transition=val)),
                 )
             )
 
     def update_current_frequencies(self):
         for key, val in self.ntd.items():
-            self.transition(key).current_frequency = -get_transition_frequency(h_diag=self.h_diag, dims=self.nvham.dims, transition=val)
+            self.transition(key).current_frequency = (float("nan") if self.h_diag is None else -get_transition_frequency(h_diag=self.h_diag, dims=self.nvham.dims, transition=val))
         self.update_tt_nuclear_gui.emit()  # connected to gui.
         # print('emission of the nuclear tt signal')
 
     def load_rabi_parameters(self):
         self.rabi_parameters = dict()
+        if self.electron_spin == 0.5:
+            from qudi.logic.snv_calibration import ensure_dummy_rabi_log
+            ensure_dummy_rabi_log(self.log_folder)
+            for name in ("snv_e1_e2", "snv_e1_e2_dummy"):
+                path = os.path.join(self.log_folder, name + "_rabi.dat")
+                if os.path.isfile(path):
+                    self.rabi_parameters[name] = RabiParametersStatic(path, transition_name="e1 ↔ e2")
+            for transition in self.transitions:
+                dummy = ensure_dummy_rabi_log(self.log_folder, transition.name)
+                self.rabi_parameters[transition.name + "_dummy"] = RabiParametersStatic(str(dummy), transition_name=transition.name + " (synthetic)")
+                path = os.path.join(self.log_folder, transition.name + "_rabi.dat")
+                if os.path.isfile(path):
+                    self.rabi_parameters[transition.name] = RabiParametersStatic(path, transition_name=transition.name)
+            return
         for f in os.listdir(self.log_folder):
             if hasattr(self._awg.mcas_dict, "awgs"):
                 if "e_rabi_ou{:.0f}deg".format(1000 * self._awg.mcas_dict.awgs["2g"].ch[1].output_amplitude) in f:
@@ -970,7 +1034,9 @@ class TransitionTracker(GenericLogic):
                 idx += 1
             except:
                 pass
-        fig, axes = plt.subplots(idx, 2, figsize=(10, 6 * (idx)))
+        if idx == 0:
+            return
+        fig, axes = plt.subplots(idx, 2, figsize=(10, 6 * (idx)), squeeze=False)
         idx = 0
         c13ms0_shown = False
         for tn, rp in self.rabi_parameters.items():
@@ -990,10 +1056,6 @@ class TransitionTracker(GenericLogic):
                 print("could not plot {}".format(tn))
 
     @property
-    def log_folder(self):
-        return r"{}transition_tracker_log".format(log_dir)
-
-    @property
     def current_local_oscillator_freq(self):
         return self._current_local_oscillator_freq
 
@@ -1004,10 +1066,15 @@ class TransitionTracker(GenericLogic):
 
     @property
     def mw_mixing_frequency_L(self):
+        if self.electron_spin == 0.5:
+            return self.snv_frequency_mhz
         return self._mw_mixing_frequency_L
 
     @mw_mixing_frequency_L.setter
     def mw_mixing_frequency_L(self, val):
+        if self.electron_spin == 0.5:
+            self.update_snv_frequency(val)
+            return
         print("TT:")
         print(val)
         self._mw_mixing_frequency_L = misc.check_type(val, "_mw_mixing_frequency_L", Number)
@@ -1030,14 +1097,21 @@ class TransitionTracker(GenericLogic):
 
     @property
     def mw_mixing_frequency_R(self):
+        if self.electron_spin == 0.5:
+            return self.snv_frequency_mhz
         return self._mw_mixing_frequency_R
 
     @property
     def mw_mixing_frequency_C(self):
+        if self.electron_spin == 0.5:
+            return self.snv_frequency_mhz
         return self._mw_mixing_frequency_C
 
     @mw_mixing_frequency_C.setter
     def mw_mixing_frequency_C(self, val):
+        if self.electron_spin == 0.5:
+            self.update_snv_frequency(val)
+            return
         print("TT:")
         print(val)
         self._mw_mixing_frequency_C = misc.check_type(val, "_mw_mixing_frequency_C", Number)
@@ -1047,6 +1121,9 @@ class TransitionTracker(GenericLogic):
 
     @mw_mixing_frequency_R.setter
     def mw_mixing_frequency_R(self, val):
+        if self.electron_spin == 0.5:
+            self.update_snv_frequency(val)
+            return
         self._mw_mixing_frequency_R = misc.check_type(val, "_mw_mixing_frequency_R", Number)
         if getattr(self, "_mw_mixing_frequency_R", 0.0) != 0.0:
             save_value_to_file(self.mw_mixing_frequency_R, "mw_mixing_frequency_R")
@@ -1378,6 +1455,8 @@ class TransitionTracker(GenericLogic):
         self.zero_field_splitting = (freq - self.current_local_oscillator_freq) / 2.0 + self.mw_mixing_frequency_L
 
     def get_rabi_parameter(self, name, **kwargs):
+        if name in ("snv_e1_e2", "snv_e1_e2_dummy"):
+            return RabiParametersSingle(rp=self.rabi_parameters[name], **kwargs)
         name = self.correct_transition_name(name)
         # Javid added this to make sure we don't use wrong transition with old scripts
         # Or another bad case - one used old calibration sript, so that everything ws saved in wrong file
@@ -1410,6 +1489,10 @@ class TransitionTracker(GenericLogic):
 
     @property
     def current_magnetic_field_vector(self):  # z and x field
+        if self.electron_spin == 0.5:
+            if self.snv_magnetic_field is None:
+                raise ValueError("Set snv_magnetic_field in tesla to calculate nuclear frequencies.")
+            return np.array([self.snv_magnetic_field.get("z", 0), self.snv_magnetic_field.get("x", 0)])
         sx, sy, sz = jmat(1.5)
         print("B field calculator")
         f1 = self.mw_mixing_frequency_L  # MHz
@@ -1449,8 +1532,11 @@ class TransitionTracker(GenericLogic):
             e.g. [17.6750, 19.8350]
 
         """
-        if mw_mixing_frequency_L is None:
-            mwfm = self.mw_mixing_frequency_L
+        mwfm = self.mw_mixing_frequency_L if mw_mixing_frequency_L is None else mw_mixing_frequency_L
+        if self.electron_spin == 0.5:
+            if ms_trans not in ("e1_e2", "e1", "e2"):
+                raise ValueError("SnV has one electron transition: use ms_trans='e1_e2'.")
+            mwfm = self.snv_frequency_mhz if mw_mixing_frequency_L is None else mw_mixing_frequency_L
 
         if type(td) is str:
             td = td.replace("14n", "14N").replace("13c", "13C").replace("29si", "29Si")
@@ -1481,9 +1567,7 @@ class TransitionTracker(GenericLogic):
             else:
                 raise Exception("{} is not and allowed value for td".format(td))
         else:
-            for key, val in td.items():
-                del td[key]
-                td[key.replace("14n", "14N").replace("13c", "13C").replace("29si", "29Si")] = val
+            td = {key.replace("14n", "14N").replace("13c", "13C").replace("29si", "29Si"): val for key, val in td.items()}
         f = list()
         for key in td.keys():
             if key not in self.Spin_Names_List:
@@ -1494,7 +1578,10 @@ class TransitionTracker(GenericLogic):
             if np.size(a) > 0:
                 f.append(a)
         ff = list(product(*f))
-        mfl = np.array(sorted([mwfm + sum(fff) for fff in ff if not np.size(fff) == 0]))
+        mfl = np.array(sorted([mwfm + sum(fff) for fff in ff]))
+
+        if self.electron_spin == 0.5:
+            return mfl
 
         # here do some ms?
         if ms_trans in ["R"]:
@@ -1504,3 +1591,75 @@ class TransitionTracker(GenericLogic):
             return mfl + -self._mw_mixing_frequency_L + self._mw_mixing_frequency_C
         else:
             return mfl
+
+    @property
+    def setup_parameters(self):
+        """Copy of the persistent settings; use update_setup_parameters to edit."""
+        return self._setup_store.snapshot()
+
+    def update_setup_parameters(self, changes):
+        snapshot = self._setup_store.update(changes)
+        self._snv_frequency_mhz = snapshot.electron.IQ_freq / 1e6
+        self.setup_parameters_changed.emit()
+        self.update_tt_electron_gui.emit()
+        return snapshot
+
+    def apply_rabi_period(self):
+        """Use the measured interpolation at the selected gate amplitude."""
+        electron = self.setup_parameters.electron
+        rp = self.rabi_parameters.get("snv_e1_e2")
+        if rp is None:
+            raise ValueError("No measured e1/e2 Rabi calibration is available.")
+        amplitude = electron.electron_rabi_opx_amp / 100
+        # No extrapolation and no substitution of synthetic calibration data.
+        data = pd.read_csv(os.path.join(self.log_folder, "snv_e1_e2_rabi.dat"), sep="\t")
+        if not data.amp0.min() <= amplitude <= data.amp0.max():
+            raise ValueError("Gate amplitude is outside the measured Rabi calibration range.")
+        frequency = float(np.asarray(rp.omega(amplitude=[amplitude])).ravel()[0])
+        if not np.isfinite(frequency) or frequency <= 0:
+            raise ValueError("Measured Rabi frequency must be positive.")
+        # pi/2 and pi must both fit the OPX 4 ns clock and >=20 ns pulses.
+        period = int(round((1000 / frequency) / 16) * 16)
+        if period < 80:
+            raise ValueError("Fitted period would require a pi/2 pulse shorter than 20 ns.")
+        self.update_setup_parameters({"electron": {"electron_rabi_period": period}})
+        return period
+
+    @property
+    def snv_frequency_mhz(self):
+        """Current e1/e2 OPX intermediate frequency, in MHz."""
+        return self.setup_parameters.electron.IQ_freq / 1e6
+
+    def update_snv_frequency(self, frequency_mhz):
+        frequency_mhz = float(frequency_mhz)
+        if not np.isfinite(frequency_mhz) or frequency_mhz <= 0:
+            raise ValueError("SnV frequency must be positive and finite.")
+        frequency_hz = validate("electron", "IQ_freq", round(frequency_mhz * 1e6))
+        save_values_to_file([frequency_mhz], None,
+                           full_path=os.path.join(self.log_folder, "snv_odmr_frequency.dat"))
+        self.update_setup_parameters({"electron": {"IQ_freq": frequency_hz}})
+
+    def save_snv_rabi_calibration(self, amplitudes, omega_mhz):
+        """Publish an accepted measured calibration in the existing RP format."""
+        amplitudes, omega_mhz = np.asarray(amplitudes), np.asarray(omega_mhz)
+        if (amplitudes.ndim != 1 or amplitudes.size < 2 or amplitudes.shape != omega_mhz.shape
+                or not np.isfinite(amplitudes).all() or not np.isfinite(omega_mhz).all()
+                or np.any(np.diff(amplitudes) <= 0) or np.any(np.diff(omega_mhz) <= 0)
+                or np.any((amplitudes < 0) | (amplitudes > 1)) or np.any(omega_mhz < 0)):
+            raise ValueError("Calibration needs finite, increasing amplitudes and frequencies.")
+        name = "snv_e1_e2"
+        path = os.path.join(self.log_folder, name + "_rabi.dat")
+        data = pd.DataFrame(dict(amp0=amplitudes, transition=0, omega=omega_mhz,
+                                 date=datetime.datetime.now().isoformat()))
+        if os.path.exists(path):
+            RabiParametersStatic(path).archive_file()
+        temporary = path + ".tmp"
+        data.to_csv(temporary, sep="\t", index=False)
+        os.replace(temporary, path)
+        rp = RabiParametersStatic(path, transition_name="e1 ↔ e2")
+        self.rabi_parameters[name] = rp
+        try:
+            self.apply_rabi_period()
+        except ValueError as exc:
+            self.log.warning("Rabi curve saved; gate period unchanged: %s", exc)
+        return rp

@@ -44,10 +44,9 @@ def ret_ret_mcas(pdc):
         # SSR_state = current_iterator_df["SSR_state"].unique()[0]
         with qua.program() as myprog:
             ou.init_program()
+            sna.setup_laser_powers(mcas)
             ou.i_1 = declare(int)
-            ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
-            ou.set_laser_power("Laser_620", sna.GENERAL_POWER_B2)
-            ou.set_laser_power("Laser_520", sna.CRC_PARAMS.laser_power_repump)
+
             ou.pause(10_000)
             with infinite_loop_():
                 with for_each_(ou.i_1, qua_array_1):

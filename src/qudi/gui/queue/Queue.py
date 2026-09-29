@@ -4,6 +4,7 @@ from PySide2.QtWidgets import QAbstractItemView, QMainWindow, QFileDialog
 
 # from PySide2 import QtGui
 from PySide2.QtCore import Signal as pyqtSignal
+from PySide2 import QtCore
 
 # from logic.qudip_enhanced import *
 # import importlib
@@ -190,6 +191,20 @@ class queue_gui(GuiBase):
         self._mw = QueueMainWindow()
         self._queue_logic = self.queue_logic()
         self.init_gui()
+        from qudi.gui.queue.acquisition_progress import AcquisitionProgressBar
+        self._acquisition_progress = AcquisitionProgressBar(self._mw)
+        self._mw.statusBar().addPermanentWidget(self._acquisition_progress, 1)
+        self._queue_logic.acquisition_progress.connect(
+            self._acquisition_progress.update_progress, QtCore.Qt.QueuedConnection)
+        self._snv_docks = []
+        if self._queue_logic.tt.electron_spin == 0.5:
+            from qudi.gui.queue.snv_calibration import SnVCalibrationDock
+            for kind in ("odmr", "rabi"):
+                dock = SnVCalibrationDock(kind, self._queue_logic, self._mw)
+                self._mw.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+                self._snv_docks.append(dock)
+            self._mw.tabifyDockWidget(*self._snv_docks)
+            self._snv_docks[0].raise_()
 
     def show(self):
         """Make window visible and put it above all other windows."""
@@ -203,6 +218,12 @@ class queue_gui(GuiBase):
             return
 
         self._deactivating = True
+        self._queue_logic.acquisition_progress.disconnect(self._acquisition_progress.update_progress)
+        for dock in getattr(self, "_snv_docks", []):
+            try:
+                self._queue_logic.snv_calibration_updated.disconnect(dock.update_result)
+            except (RuntimeError, TypeError):
+                pass
         mw = self._mw
         queue_logic = self._queue_logic
 

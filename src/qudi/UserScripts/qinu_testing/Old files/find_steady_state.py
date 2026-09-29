@@ -53,7 +53,7 @@ def ret_ret_mcas(pdc):
             crc_rep = declare(int)
             assign(crc_rep, crc_period)
             ou.init_program()
-            # ou.set_laser_power("Laser_620_det", sna.GENERAL_POWER_A1)
+            # ou.set_laser_power("Laser_620_det", ou.setup_parameters.general.laser_power_A1)
             ou.set_laser_power("Laser_620", 6)
             ou.set_laser_power("Laser_520", 30_000)
             ou.pause(10_000)

@@ -51,7 +51,7 @@ class NVHam:
         evals, evecs = ham.h_nv.eigenstates() #calculate eigenvalues and eigenstates
     """
 
-    def __init__(self, magnet_field=None, n_type=None, electron_levels=None, nitrogen_levels=None, **kwargs):
+    def __init__(self, magnet_field=None, n_type=None, electron_levels=None, nitrogen_levels=None, electron_spin=1.5, **kwargs):
         """
 
         :param magnet_field: dict
@@ -69,17 +69,17 @@ class NVHam:
         :param D: float
             Zero field splitting, default 2870 MHz.
         """
-        self.j = {'14n': 1, '15n': .5, 'e': 1.5, '13c': .5, '29si':0.5}
+        self.j = {'14n': 1, '15n': .5, 'e': electron_spin, '13c': .5, '29si':0.5}
         self._gamma = gamma  # gyromagnetic ratios given in 1/2pi MHz/T, i.e. f = gamma*B
         self._qp = {'14n': -4.945745, '15n': 0.0, '13c': 0, '29si':0}
         self._hf_para_n = {'14n': -2.165, '15n': +3.03}
         self._hf_perp_n = {'14n': -2.7, '15n': +3.65}
         self.D = 34.9
-        self.dims = [4]# 3 for NV was
+        self.dims = [int(2 * electron_spin + 1)]
         self.magnet_field_cart = coordinates.Coord().coord(magnet_field, 'cart')  # magnet field in cartesian coordinates
         self.n_type = n_type #'14n', '15n', None
         self.nitrogen_levels = nitrogen_levels
-        self.electron_levels = [0,1,2,3] if electron_levels is None else electron_levels
+        self.electron_levels = list(range(self.dims[0])) if electron_levels is None else electron_levels
         for key in kwargs:
             setattr(self, key, kwargs[key])
         self.set_h_nv()
@@ -236,7 +236,7 @@ class NVHam:
         """
         calculates the base hamiltonian with parameters specified at instantiation
         """
-        self.spins = np.array([1.5])
+        self.spins = np.array([self.j['e']])
         self.spin_levels = [self.electron_levels]
         self.h_nv = self.h_electron().extract_states(self.electron_levels)
         if self.n_type is not None:
