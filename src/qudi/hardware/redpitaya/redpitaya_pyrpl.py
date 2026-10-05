@@ -29,7 +29,45 @@ from qudi.interface.redpitaya_interface import RedPitayaInterface
 import time
 import threading
 import math
+from contextlib import contextmanager
 from PySide2 import QtCore
+
+
+@contextmanager
+def _hold_pid_integrator(pid):
+    """Hold the integral memory through validation, writing and readback.
+
+    PyRPL's ival is a live FPGA accumulator, not a stored setpoint. Setting
+    i to zero holds that accumulator without resetting it or disabling P.
+    Restore the original gain even when validation or communication fails.
+    """
+    integral_gain = float(pid.i)
+    if not math.isfinite(integral_gain):
+        raise RuntimeError("Refusing PID write with non-finite integral gain.")
+    try:
+        if integral_gain != 0.0:
+            pid.i = 0.0
+        if float(pid.i) != 0.0:
+            raise RuntimeError("PID integrator hold verification failed.")
+        yield
+    finally:
+        if integral_gain != 0.0:
+            pid.i = integral_gain
+            if float(pid.i) != integral_gain:
+                raise RuntimeError("PID integral gain restoration verification failed.")
+
+
+def _write_held_pid_integrator(pid, target):
+    """Verify a held accumulator, allowing for its 2**-13 V resolution."""
+    pid.ival = target
+    written = float(pid.ival)
+    if not math.isfinite(written) or abs(written - target) > 2.0e-4:
+        raise RuntimeError(
+            "PID integrator write verification failed while integration held: "
+            f"target={target:.9g} V, readback={written:.9g} V, "
+            f"difference={written - target:.9g} V, tolerance=0.0002 V."
+        )
+    return written
 
 
 class _PidReadRequest:
@@ -187,52 +225,50 @@ class _PyrplIoBridge(QtCore.QObject):
     def _write_pid_integrator(self, request):
         try:
             pid = self._pids[request.pid_channel]
-            proportional_gain = float(pid.p)
-            pid_minimum = float(pid.min_voltage)
-            pid_maximum = float(pid.max_voltage)
-            current = float(pid.ival)
+            with _hold_pid_integrator(pid):
+                proportional_gain = float(pid.p)
+                pid_minimum = float(pid.min_voltage)
+                pid_maximum = float(pid.max_voltage)
+                current = float(pid.ival)
 
-            if not all(
-                math.isfinite(value)
-                for value in (
-                    proportional_gain,
-                    pid_minimum,
-                    pid_maximum,
-                    current,
-                )
-            ):
-                raise RuntimeError(
-                    "Refusing PID integrator write with non-finite PID state."
-                )
-            if pid_minimum >= pid_maximum:
-                raise RuntimeError(
-                    "Refusing PID integrator write with invalid PID limits."
-                )
-            if abs(proportional_gain) > request.p_tolerance:
-                raise RuntimeError(
-                    "Refusing PID integrator write while proportional gain is non-zero."
-                )
-            if abs(current - request.expected_current) > request.current_tolerance:
-                raise RuntimeError(
-                    "Refusing stale PID integrator write because ival has changed."
-                )
-            if not pid_minimum <= request.target <= pid_maximum:
-                raise ValueError(
-                    "Refusing PID integrator target outside the configured PID limits."
-                )
+                if not all(
+                    math.isfinite(value)
+                    for value in (
+                        proportional_gain,
+                        pid_minimum,
+                        pid_maximum,
+                        current,
+                    )
+                ):
+                    raise RuntimeError(
+                        "Refusing PID integrator write with non-finite PID state."
+                    )
+                if pid_minimum >= pid_maximum:
+                    raise RuntimeError(
+                        "Refusing PID integrator write with invalid PID limits."
+                    )
+                if abs(proportional_gain) > request.p_tolerance:
+                    raise RuntimeError(
+                        "Refusing PID integrator write while proportional gain is non-zero."
+                    )
+                if abs(current - request.expected_current) > request.current_tolerance:
+                    raise RuntimeError(
+                        "Refusing stale PID integrator write because ival has changed."
+                    )
+                if not pid_minimum <= request.target <= pid_maximum:
+                    raise ValueError(
+                        "Refusing PID integrator target outside the configured PID limits."
+                    )
 
-            pid.ival = request.target
-            written = float(pid.ival)
-            if abs(written - request.target) > 2.0e-4:
-                raise RuntimeError("PID integrator write verification failed.")
+                written = _write_held_pid_integrator(pid, request.target)
 
-            request.value = {
-                'previous_integrator': current,
-                'written_integrator': written,
-                'proportional_gain': proportional_gain,
-                'pid_minimum': pid_minimum,
-                'pid_maximum': pid_maximum,
-            }
+                request.value = {
+                    'previous_integrator': current,
+                    'written_integrator': written,
+                    'proportional_gain': proportional_gain,
+                    'pid_minimum': pid_minimum,
+                    'pid_maximum': pid_maximum,
+                }
         except Exception as error:
             request.error = error
         finally:
@@ -242,102 +278,100 @@ class _PyrplIoBridge(QtCore.QObject):
     def _write_pid_output_target(self, request):
         try:
             pid = self._pids[request.pid_channel]
-            current_integrator = float(pid.ival)
-            current_output = float(pid.current_output_signal)
-            proportional_gain = float(pid.p)
-            pid_minimum = float(pid.min_voltage)
-            pid_maximum = float(pid.max_voltage)
-            input_state = _read_pid_input_state(pid)
+            with _hold_pid_integrator(pid):
+                current_integrator = float(pid.ival)
+                current_output = float(pid.current_output_signal)
+                proportional_gain = float(pid.p)
+                pid_minimum = float(pid.min_voltage)
+                pid_maximum = float(pid.max_voltage)
+                input_state = _read_pid_input_state(pid)
 
-            numeric_state = (
-                current_integrator,
-                current_output,
-                proportional_gain,
-                pid_minimum,
-                pid_maximum,
-                input_state['setpoint'],
-            )
-            if not all(math.isfinite(value) for value in numeric_state):
-                raise RuntimeError(
-                    "Refusing PID output change with non-finite PID state."
+                numeric_state = (
+                    current_integrator,
+                    current_output,
+                    proportional_gain,
+                    pid_minimum,
+                    pid_maximum,
+                    input_state['setpoint'],
                 )
-            if pid_minimum >= pid_maximum:
-                raise RuntimeError(
-                    "Refusing PID output change with invalid PID limits."
-                )
-            if (
-                abs(current_integrator - request.expected_integrator)
-                > request.current_tolerance
-            ):
-                raise RuntimeError(
-                    "Refusing stale PID output change because ival has changed."
-                )
-            if (
-                abs(current_output - request.expected_output)
-                > request.output_tolerance
-            ):
-                raise RuntimeError(
-                    "Refusing stale PID output change because output has changed."
-                )
-            source_output = input_state['input_source_output']
-            if abs(proportional_gain) <= 1e-12:
-                proportional_term = 0.0
-            else:
-                if any(
-                    abs(value) > 1e-12
-                    for value in input_state['input_filter']
+                if not all(math.isfinite(value) for value in numeric_state):
+                    raise RuntimeError(
+                        "Refusing PID output change with non-finite PID state."
+                    )
+                if pid_minimum >= pid_maximum:
+                    raise RuntimeError(
+                        "Refusing PID output change with invalid PID limits."
+                    )
+                if (
+                    abs(current_integrator - request.expected_integrator)
+                    > request.current_tolerance
                 ):
                     raise RuntimeError(
-                        "Refusing P-aware PID output change with active input filters."
+                        "Refusing stale PID output change because ival has changed."
                     )
-                if input_state['differential_mode_enabled']:
+                if (
+                    abs(current_output - request.expected_output)
+                    > request.output_tolerance
+                ):
                     raise RuntimeError(
-                        "Refusing P-aware PID output change in differential mode."
+                        "Refusing stale PID output change because output has changed."
                     )
-                if source_output is None or not math.isfinite(source_output):
-                    raise RuntimeError(
-                        "Refusing P-aware PID output change without readable input."
+                source_output = input_state['input_source_output']
+                if abs(proportional_gain) <= 1e-12:
+                    proportional_term = 0.0
+                else:
+                    if any(
+                        abs(value) > 1e-12
+                        for value in input_state['input_filter']
+                    ):
+                        raise RuntimeError(
+                            "Refusing P-aware PID output change with active input filters."
+                        )
+                    if input_state['differential_mode_enabled']:
+                        raise RuntimeError(
+                            "Refusing P-aware PID output change in differential mode."
+                        )
+                    if source_output is None or not math.isfinite(source_output):
+                        raise RuntimeError(
+                            "Refusing P-aware PID output change without readable input."
+                        )
+                    proportional_term = proportional_gain * (
+                        source_output - input_state['setpoint']
                     )
-                proportional_term = proportional_gain * (
-                    source_output - input_state['setpoint']
-                )
-            if not (
-                pid_minimum - request.output_tolerance
-                <= request.target_output
-                <= pid_maximum + request.output_tolerance
-            ):
-                raise ValueError(
-                    "Refusing PID target outside the configured PID limits."
-                )
+                if not (
+                    pid_minimum - request.output_tolerance
+                    <= request.target_output
+                    <= pid_maximum + request.output_tolerance
+                ):
+                    raise ValueError(
+                        "Refusing PID target outside the configured PID limits."
+                    )
 
-            target_integrator = request.target_output - proportional_term
-            if not -4.0 <= target_integrator <= 4.0:
-                raise ValueError(
-                    "Refusing target outside the PID integrator hardware range."
-                )
+                target_integrator = request.target_output - proportional_term
+                if not -4.0 <= target_integrator <= 4.0:
+                    raise ValueError(
+                        "Refusing target outside the PID integrator hardware range."
+                    )
 
-            pid.ival = target_integrator
-            written_integrator = float(pid.ival)
-            if abs(written_integrator - target_integrator) > 2.0e-4:
-                raise RuntimeError("PID integrator write verification failed.")
-            written_output = float(pid.current_output_signal)
-            written_output_error = written_output - request.target_output
+                written_integrator = _write_held_pid_integrator(pid, target_integrator)
+                written_output = float(pid.current_output_signal)
+                written_output_error = written_output - request.target_output
 
-            request.value = {
-                'previous_integrator': current_integrator,
-                'previous_output': current_output,
-                'target_output': request.target_output,
-                'target_integrator': target_integrator,
-                'written_integrator': written_integrator,
-                'written_output': written_output,
-                'written_output_error': written_output_error,
-                'written_output_verified': (
-                    abs(written_output_error) <= 0.02
-                ),
-                'proportional_gain': proportional_gain,
-                'proportional_term': proportional_term,
-                **input_state,
-            }
+                request.value = {
+                    'previous_integrator': current_integrator,
+                    'previous_output': current_output,
+                    'target_output': request.target_output,
+                    'target_integrator': target_integrator,
+                    'written_integrator': written_integrator,
+                    'written_output': written_output,
+                    'written_output_error': written_output_error,
+                    'written_output_verified': (
+                        abs(written_output_error) <= 0.02
+                    ),
+                    'proportional_gain': proportional_gain,
+                    'proportional_term': proportional_term,
+                    **input_state,
+                }
         except Exception as error:
             request.error = error
         finally:

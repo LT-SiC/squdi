@@ -98,6 +98,27 @@ def _load_hardware_module():
     return module
 
 
+class MovingPid:
+    """Model register quantization and integration between network accesses."""
+
+    def __init__(self, state, write_error=0.0):
+        self.__dict__.update(vars(state))
+        self._ival = self.__dict__.pop('ival')
+        self.write_error = write_error
+        self.gains_at_write = []
+
+    @property
+    def ival(self):
+        if self.i != 0.0:
+            self._ival += 0.001
+        return self._ival
+
+    @ival.setter
+    def ival(self, value):
+        self.gains_at_write.append(self.i)
+        self._ival = round(value * 2**13) / 2**13 + self.write_error
+
+
 class ReadPidIntegratorTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -113,6 +134,7 @@ class ReadPidIntegratorTest(unittest.TestCase):
             self.module.RedPitayaPyrpl
         )
         self.hardware._pid0 = types.SimpleNamespace(
+            i=10.0,
             ival=-0.1,
             p=0.0,
             min_voltage=-0.6,
@@ -125,6 +147,7 @@ class ReadPidIntegratorTest(unittest.TestCase):
             _rp=fake_rp,
         )
         self.hardware._pid1 = types.SimpleNamespace(
+            i=10.0,
             ival=0.25,
             p=0.1,
             min_voltage=-0.5,
@@ -137,6 +160,7 @@ class ReadPidIntegratorTest(unittest.TestCase):
             _rp=fake_rp,
         )
         self.hardware._pid2 = types.SimpleNamespace(
+            i=10.0,
             ival=0.5,
             p=-0.2,
             min_voltage=-0.4,
@@ -304,6 +328,83 @@ class ReadPidIntegratorTest(unittest.TestCase):
                 target_output=-0.1,
             )
         self.assertEqual(self.hardware._pid1.ival, 0.25)
+
+    def _write_moving_pid(self, output_target):
+        if output_target:
+            return self.hardware.set_pid_output_target_checked(
+                pid_channel=0,
+                expected_integrator=-0.1,
+                expected_output=-0.1,
+                target_output=0.12,
+            )
+        return self.hardware.set_pid_integrator_checked(
+            pid_channel=0,
+            expected_current=-0.1,
+            target=0.12,
+        )
+
+    def test_live_integrator_is_held_and_gain_restored_in_both_write_paths(self):
+        for output_target in (False, True):
+            with self.subTest(output_target=output_target):
+                self.setUp()
+                pid = MovingPid(self.hardware._pid0)
+                self.hardware._pid0 = pid
+
+                result = self._write_moving_pid(output_target)
+
+                self.assertEqual(pid.gains_at_write, [0.0])
+                self.assertLess(abs(result['written_integrator'] - 0.12), 2e-4)
+                self.assertEqual(pid.i, 10.0)
+                # Integration resumes after verification has completed.
+                self.assertGreater(pid.ival - result['written_integrator'], 2e-4)
+
+    def test_bad_readback_is_rejected_and_gain_restored(self):
+        for output_target in (False, True):
+            for write_error in (0.01, float('nan'), float('inf')):
+                with self.subTest(output_target=output_target, error=write_error):
+                    self.setUp()
+                    pid = MovingPid(self.hardware._pid0, write_error=write_error)
+                    self.hardware._pid0 = pid
+
+                    with self.assertRaisesRegex(RuntimeError, 'target=.*readback='):
+                        self._write_moving_pid(output_target)
+
+                    self.assertEqual(pid.i, 10.0)
+                    self.assertEqual(pid.gains_at_write, [0.0])
+
+    def test_gain_restored_when_validation_rejects_write(self):
+        for output_target in (False, True):
+            with self.subTest(output_target=output_target):
+                self.setUp()
+                pid = MovingPid(self.hardware._pid0)
+                pid._ival = -0.3
+                self.hardware._pid0 = pid
+
+                with self.assertRaisesRegex(RuntimeError, 'ival has changed'):
+                    self._write_moving_pid(output_target)
+
+                self.assertEqual(pid.i, 10.0)
+                self.assertEqual(pid.gains_at_write, [])
+
+    def test_gain_restored_when_register_write_raises(self):
+        class FailingPid(MovingPid):
+            @MovingPid.ival.setter
+            def ival(self, value):
+                raise OSError('register write failed')
+
+        for output_target in (False, True):
+            with self.subTest(output_target=output_target):
+                self.setUp()
+                pid = FailingPid(self.hardware._pid0)
+                self.hardware._pid0 = pid
+                with self.assertRaisesRegex(OSError, 'register write failed'):
+                    self._write_moving_pid(output_target)
+                self.assertEqual(pid.i, 10.0)
+
+    def test_zero_integral_gain_remains_zero(self):
+        self.hardware._pid0.i = 0.0
+        self._write_moving_pid(True)
+        self.assertEqual(self.hardware._pid0.i, 0.0)
 
 
 if __name__ == '__main__':
