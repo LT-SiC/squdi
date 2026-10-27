@@ -25,7 +25,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 import traceback
-
+import time
 from qudi.core.connector import Connector
 from qudi.core.statusvariable import StatusVar
 from qudi.util.mutex import Mutex
@@ -50,7 +50,7 @@ class SpectrometerLogic(LogicBase):
     # declare connectors
     spectrometer = Connector(interface='SpectrometerInterface')
     modulation_device = Connector(interface='ModulationInterface', optional=True)
-    flip_mirror = Connector(interface = 'DigitalSwitchNI', optional=True)
+    flip_mirror = Connector(interface = 'SwitchInterface', optional=True)
     # declare status variables
     _spectrum = StatusVar(name='spectrum', default=[None, None])
     _background = StatusVar(name='background', default=None)
@@ -61,6 +61,7 @@ class SpectrometerLogic(LogicBase):
     _fit_region = StatusVar(name='fit_region', default=[0, 1])
     _axis_type_frequency = StatusVar(name='axis_type_frequency', default=False)
     max_repetitions = StatusVar(name='max_repetitions', default=0)
+    # _repeat_times = StatusVar(name='repeat_times', default=3)
     do_flip = StatusVar(name='do_flip', default=False)
     _fit_config = StatusVar(name='fit_config', default=dict())
 
@@ -176,7 +177,8 @@ class SpectrometerLogic(LogicBase):
             #key = self.flip_mirror().available_states.keys()[0]
             #state = self.flip_mirror().get_state(key)
             self.spectrometer().clearBuffer()
-            self.flip_mirror().set_state(self.flip_mirror().switch_names[0], 'On')
+            self.flip_mirror().set_state(self.flip_mirror().switch_names[0], 'Off')
+            time.sleep(1)
         # get data from the spectrometer
         data = np.array(self.spectrometer().record_spectrum())
         with self._lock:
@@ -187,6 +189,7 @@ class SpectrometerLogic(LogicBase):
 
             self._wavelength = data[0, :]
             self._repetitions_spectrum += 1
+            
 
         if self.differential_spectrum_available and self._differential_spectrum:
             self.modulation_device().modulation_off()
@@ -205,6 +208,10 @@ class SpectrometerLogic(LogicBase):
         if self._constant_acquisition and not self._stop_acquisition \
                 and (not self.max_repetitions or self._repetitions_spectrum < self.max_repetitions):
             return self.run_get_spectrum(reset=True)
+        
+        if self._repetitions_spectrum < self.max_repetitions and not self._stop_acquisition:
+            return self.run_get_spectrum(reset=False)
+
         self._acquisition_running = False
         self.fit_region = self._fit_region
         self.sig_state_updated.emit()
@@ -250,6 +257,10 @@ class SpectrometerLogic(LogicBase):
         if self._constant_acquisition and not self._stop_acquisition\
                 and (not self.max_repetitions or self._repetitions_background < self.max_repetitions):
             return self.run_get_background(reset=False)
+                
+        if self._repetitions_background < self.max_repetitions and not self._stop_acquisition:
+            return self.run_get_background(reset=False)
+        
         self._acquisition_running = False
         self.sig_state_updated.emit()
         return self.background
@@ -477,7 +488,20 @@ class SpectrometerLogic(LogicBase):
     @exposure_time.setter
     def exposure_time(self, value):
         self.spectrometer().exposure_time = float(value)
+    @property
+    def grating(self):
+        return self.spectrometer().grating
 
+    @grating.setter
+    def grating(self, value):
+        self.spectrometer().grating = float(value)
+    @property
+    def cwavelength(self):
+        return self.spectrometer().cwavelength
+
+    @cwavelength.setter
+    def cwavelength(self, value):
+        self.spectrometer().cwavelength = float(value)
     ################
     # Fitting things
 

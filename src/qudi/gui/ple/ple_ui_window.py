@@ -1,24 +1,18 @@
 
-from PySide2 import QtCore, QtGui, QtWidgets
-import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 import qudi.util.uic as uic
 import os
-from qudi.util.widgets.advanced_dockwidget import AdvancedDockWidget
-from qudi.util.widgets.fitting import FitWidget
 import importlib
-from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
+from qudi.interface.scanning_probe_interface import ScannerAxis, ScannerChannel
 from qudi.gui.ple.ple_repump_widget import PleMicrowaveWidget, PlePulsedWidget
 from qudi.gui.ple.controller_widget import ControllerWidget
-from typing import Tuple, Union, Sequence
-from typing import Optional, List
+from typing import Tuple
+from typing import Optional
 try:
     importlib.reload(ple_data_widget)
 except NameError:
     import qudi.gui.ple.ple_data_widget as ple_data_widget
-try:
-    importlib.reload(ple_averaged_widget)
-except NameError:
-    import qudi.gui.ple.ple_averaged_widget as ple_averaged_widget
+
 try:
     importlib.reload(matrix_widget)
 except NameError:
@@ -46,7 +40,7 @@ class PLEScanMainWindow(QtWidgets.QMainWindow):
         self.ple_widget = ple_data_widget.PLEDataWidget(axes, channel)
         self.ple_data_dockWidget.setWidget(self.ple_widget)
 
-        self.ple_averaged_widget = ple_averaged_widget.PLEAveragedDataWidget(axes, channel)
+        self.ple_averaged_widget = ple_data_widget.PLEDataWidget(axes, channel)
         self.ple_averaged_dockWidget.setWidget(self.ple_averaged_widget)
 
         self.matrix_widget = matrix_widget.PLE2DWidget(axes, channel)

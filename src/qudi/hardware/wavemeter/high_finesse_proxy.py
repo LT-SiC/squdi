@@ -23,8 +23,11 @@ If not, see <https://www.gnu.org/licenses/>.
 """
 
 import time
+import os
+import subprocess
 from typing import Optional, List, Set, TYPE_CHECKING, Dict
-from ctypes import byref, cast, c_double, c_int, c_long, POINTER, WINFUNCTYPE, WinDLL
+import ctypes
+from ctypes import byref, cast, c_double, c_int, c_long, POINTER, WINFUNCTYPE, WinDLL, c_char
 from PySide2.QtCore import QObject
 from qudi.core.threadmanager import ThreadManager
 from qudi.core.logger import get_logger
@@ -34,16 +37,30 @@ from qudi.util.mutex import Mutex
 
 import qudi.hardware.wavemeter.high_finesse_constants as high_finesse_constants
 from qudi.hardware.wavemeter.high_finesse_wrapper import load_dll, setup_dll, MIN_VERSION
+
 if TYPE_CHECKING:
     from qudi.hardware.wavemeter.high_finesse_wavemeter import HighFinesseWavemeter
 
 
-THREAD_NAME_WATCHDOG = 'wavemeter_callback_error_watchdog'
+THREAD_NAME_WATCHDOG = "wavemeter_callback_error_watchdog"
+WLM_PROCESS_NAMES = (
+    "wlm.exe",
+    "wlm_ws.exe",
+    "wlm_ws4.exe",
+    "wlm_ws5.exe",
+    "wlm_ws6.exe",
+    "wlm_ws7.exe",
+    "wlm_ws8.exe",
+    "wlm_ws10.exe",
+)
+WLM_GRACEFUL_EXIT_TIMEOUT = 10.0
+WLM_START_SETTLE_TIME = 5.0
 
 
 class Watchdog(QObject):
     """A watchdog that can take care of errors in the callback function and checks for other changes."""
-    def __init__(self, proxy: 'HighFinesseProxy', watch_interval: float):
+
+    def __init__(self, proxy: "HighFinesseProxy", watch_interval: float):
         super().__init__()
         self._proxy = proxy
         self.log = get_logger(__name__)
@@ -54,7 +71,7 @@ class Watchdog(QObject):
         while not self._stop:
             if self._proxy.error_in_callback:
                 self.handle_error()
-            if self._proxy.module_state() == 'locked':
+            if self._proxy.module_state() == "locked":
                 self.check_for_channel_activation_change()
             time.sleep(self._watch_interval)
 
@@ -64,11 +81,11 @@ class Watchdog(QObject):
     def check_for_channel_activation_change(self) -> None:
         actual_active_channels = set(self._proxy.get_active_channels())
         if self._proxy.get_connected_channels() != actual_active_channels:
-            self.log.warning('Channel was deactivated or activated through GUI.')
+            self.log.warning("Channel was deactivated or activated through GUI.")
             self._proxy.stop_everything()
 
     def handle_error(self) -> None:
-        self.log.warning('Error in callback function.')
+        self.log.warning("Error in callback function.")
         self._proxy.stop_everything()
         self._proxy.error_in_callback = False
 
@@ -84,7 +101,19 @@ class HighFinesseProxy(Base):
             watchdog_interval: 1.0  # how often the watchdog checks for errors/changes in s
     """
 
-    _watchdog_interval: float = ConfigOption(name='watchdog_interval', default=1.0)
+    _watchdog_interval: float = ConfigOption(name="watchdog_interval", default=1.0)
+    _wavemeter_executable_path: Optional[str] = ConfigOption(
+        name="wavemeter_executable_path", default=None, missing="nothing"
+    )
+    _allow_direct_process_start: bool = ConfigOption(
+        name="allow_direct_process_start", default=False, missing="nothing"
+    )
+    _allow_force_process_kill: bool = ConfigOption(
+        name="allow_force_process_kill", default=False, missing="nothing"
+    )
+    _restart_settle_time: float = ConfigOption(
+        name="restart_settle_time", default=WLM_START_SETTLE_TIME, missing="nothing"
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -96,34 +125,37 @@ class HighFinesseProxy(Base):
         self._callback_function: Optional[callable] = None
         self.error_in_callback: bool = False
         self._wm_has_switch: bool = False
+        self._last_wlm_executable_path: Optional[str] = None
 
-        self._connected_instream_modules: Dict['HighFinesseWavemeter', Set[int]] = {}
+        self._connected_instream_modules: Dict["HighFinesseWavemeter", Set[int]] = {}
 
     def on_activate(self) -> None:
         if self._check_for_second_instance():
-            raise RuntimeError('There is already a running proxy instance. '
-                               'Did you configure more than a single instance of this proxy?')
+            raise RuntimeError("There is already a running proxy instance. " "Did you configure more than a single instance of this proxy?")
 
         # load and prepare the wavemeter DLL
         try:
             self._wavemeter_dll = load_dll()
         except FileNotFoundError as e:
-            raise ValueError('There is no wavemeter installed on this computer.\n'
-                             'Please install a High Finesse wavemeter and try again.') from e
+            raise ValueError("There is no wavemeter installed on this computer.\n" "Please install a High Finesse wavemeter and try again.") from e
         else:
             v = [self._wavemeter_dll.GetWLMVersion(i) for i in range(4)]
-            self.log.info(f'Successfully loaded wavemeter DLL of WS{v[0]} {v[1]},'
-                          f' software revision {v[2]}, compilation number {v[3]}.')
+            if v[0] == high_finesse_constants.GetFrequencyError.ErrWlmMissing.value:
+                raise RuntimeError("The wavemeter application is not active. " "Start the wavemeter application before activating the qudi module.")
+
+            self.log.info(f"Successfully loaded wavemeter DLL of WS{v[0]} {v[1]}," f" software revision {v[2]}, compilation number {v[3]}.")
 
         software_rev = v[2]
         if software_rev < MIN_VERSION:
-            self.log.warning(f'The wavemeter DLL software revision {software_rev} is older than the lowest revision '
-                             f'tested to be working with the wrapper ({MIN_VERSION}). '
-                             f'Setting up the wavemeter DLL might fail.')
+            self.log.warning(
+                f"The wavemeter DLL software revision {software_rev} is older than the lowest revision "
+                f"tested to be working with the wrapper ({MIN_VERSION}). "
+                f"Setting up the wavemeter DLL might fail."
+            )
         try:
             setup_dll(self._wavemeter_dll)
         except AttributeError:
-            self.log.warning('One or more function is not available. The wavemeter version is likely outdated.')
+            self.log.warning("One or more function is not available. The wavemeter version is likely outdated.")
 
         # try to activate the multi-channel switch and check if switch is present
         self._wavemeter_dll.SetSwitcherMode(True)
@@ -133,15 +165,13 @@ class HighFinesseProxy(Base):
         else:
             self._wm_has_switch = False
 
-        self._stop_measurement()
-
         self._set_up_watchdog()
 
     def on_deactivate(self) -> None:
         self._tear_down_watchdog()
         del self._wavemeter_dll
 
-    def connect_instreamer(self, module: 'HighFinesseWavemeter', channels: List[int]):
+    def connect_instreamer(self, module: "HighFinesseWavemeter", channels: List[int]):
         """
         Connect an instreamer module to the proxy.
         The proxy will start to put new samples into the instreamer buffer.
@@ -158,23 +188,58 @@ class HighFinesseProxy(Base):
                 self._start_measurement()
                 self._start_callback()
         else:
-            self.log.warning('Instream module is already connected.')
+            self.log.warning("Instream module is already connected.")
 
-    def disconnect_instreamer(self, module: 'HighFinesseWavemeter'):
-        """ Disconnect an instreamer module from the proxy. """
+    def disconnect_instreamer(self, module: "HighFinesseWavemeter"):
+        """Disconnect an instreamer module from the proxy."""
         if module in self._connected_instream_modules:
             channels_disconnecting_instreamer = self._connected_instream_modules[module]
             with self._lock:
                 del self._connected_instream_modules[module]
                 if not self._connected_instream_modules:
                     self._stop_callback()
-                    self._stop_measurement()
                 else:
                     # deactivate channels that are not connected by other instreamers
-                    for ch in (channels_disconnecting_instreamer - self.get_connected_channels()):
+                    for ch in channels_disconnecting_instreamer - self.get_connected_channels():
                         self._deactivate_channel(ch)
         else:
-            self.log.warning('Instream module is not connected and can therefore not be disconnected.')
+            self.log.warning("Instream module is not connected and can therefore not be disconnected.")
+
+    def restart_wlm_application(
+        self, timeout: float = 30.0, start_silent: bool = True
+    ) -> None:
+        """Restart the HighFinesse WLM application and reconnect active streams.
+
+        The vendor callback connection does not survive a WLM application restart.
+        This method therefore remembers connected instreamers, tears down the
+        callback, restarts the WLM process through the DLL, and reconnects the
+        same instreamer modules afterwards.
+        """
+        remembered_streamers = list(self._connected_instream_modules.items())
+
+        self.log.warning("Restarting HighFinesse WLM application.")
+        for streamer, _ in remembered_streamers:
+            streamer.stop_stream_watchdog()
+
+        with self._lock:
+            self._connected_instream_modules = {}
+            self._stop_callback_if_running()
+            self._stop_measurement_if_running()
+            self._exit_wlm_application(timeout=timeout)
+            self._reload_wavemeter_dll()
+            self._start_wlm_application(timeout=timeout, start_silent=start_silent)
+            setup_dll(self._wavemeter_dll)
+            self._check_wlm_version()
+            self._check_for_switch()
+
+        self.log.info(f"Waiting {self._restart_settle_time:.1f} s for HighFinesse WLM to settle.")
+        time.sleep(self._restart_settle_time)
+
+        for streamer, _ in remembered_streamers:
+            streamer.reapply_wavemeter_settings()
+            streamer.start_stream()
+
+        self.log.info("HighFinesse WLM application restart complete.")
 
     def sample_rate(self) -> float:
         """
@@ -194,12 +259,18 @@ class HighFinesseProxy(Base):
 
         return 1e3 / turnaround_time_ms
 
+    def get_wavelength_m(self, ch: int) -> float:
+        """Read the current wavelength of a switch channel directly from the DLL in meters."""
+        wavelength_nm = self._wavemeter_dll.GetWavelengthNum(ch, 0)
+        if wavelength_nm <= 0:
+            return wavelength_nm
+        return 1e-9 * wavelength_nm
+
     def set_exposure_time(self, ch: int, exp_time: float) -> None:
-        """ Set the exposure time for a specific switch channel. """
+        """Set the exposure time for a specific switch channel."""
         err = self._wavemeter_dll.SetExposureNum(ch, 1, exp_time)
         if err:
-            raise RuntimeError(f'Wavemeter error while setting exposure time of channel {ch}: '
-                               f'{high_finesse_constants.ResultError(err)}')
+            raise RuntimeError(f"Wavemeter error while setting exposure time of channel {ch}: " f"{high_finesse_constants.ResultError(err)}")
 
     def get_active_channels(self) -> List[int]:
         """
@@ -229,10 +300,9 @@ class HighFinesseProxy(Base):
 
     def stop_everything(self) -> None:
         """Meant to be called from watchdog."""
-        self.log.warning('Stopping all streams.')
+        self.log.warning("Stopping all streams.")
         streamers = list(self._connected_instream_modules).copy()
         self._stop_callback()
-        self._stop_measurement()
         self._connected_instream_modules = {}
         for streamer in streamers:
             # stop all streams without them triggering the proxy disconnect
@@ -244,38 +314,290 @@ class HighFinesseProxy(Base):
         """Check if there already is a proxy running."""
         return THREAD_NAME_WATCHDOG in self._thread_manager.thread_names
 
+    def _check_wlm_version(self) -> None:
+        v = [self._wavemeter_dll.GetWLMVersion(i) for i in range(4)]
+        if v[0] == high_finesse_constants.GetFrequencyError.ErrWlmMissing.value:
+            raise RuntimeError(
+                "The wavemeter application is not active. "
+                "Start the wavemeter application before activating the qudi module."
+            )
+
+        self.log.info(
+            f"Successfully loaded wavemeter DLL of WS{v[0]} {v[1]},"
+            f" software revision {v[2]}, compilation number {v[3]}."
+        )
+
+        software_rev = v[2]
+        if software_rev < MIN_VERSION:
+            self.log.warning(
+                f"The wavemeter DLL software revision {software_rev} is older than the lowest revision "
+                f"tested to be working with the wrapper ({MIN_VERSION}). "
+                f"Setting up the wavemeter DLL might fail."
+            )
+
+    def _check_for_switch(self) -> None:
+        self._wavemeter_dll.SetSwitcherMode(True)
+        is_active = self._wavemeter_dll.GetSwitcherMode(0)
+        self._wm_has_switch = bool(is_active)
+
+    def _stop_callback_if_running(self) -> None:
+        if self._callback_function is not None:
+            self._stop_callback()
+
+    def _stop_measurement_if_running(self) -> None:
+        try:
+            self._wavemeter_dll.Operation(high_finesse_constants.cCtrlStopAll)
+        except Exception:
+            self.log.exception("Failed to stop wavemeter measurement before WLM restart.")
+
+        try:
+            self._wavemeter_dll.SetDeviationMode(False)
+        except Exception:
+            self.log.exception("Failed to disable wavemeter deviation mode before WLM restart.")
+
+    def _exit_wlm_application(self, timeout: float) -> None:
+        action = (
+            high_finesse_constants.cCtrlWLMExit
+            | high_finesse_constants.cCtrlWLMWait
+            | high_finesse_constants.cCtrlWLMSilent
+        )
+        result = self._wavemeter_dll.ControlWLM(
+            action,
+            None,
+            0,
+        )
+        if result:
+            self.log.debug(f"ControlWLM exit returned {result}.")
+
+        deadline = time.monotonic() + timeout
+        graceful_timeout = min(timeout, WLM_GRACEFUL_EXIT_TIMEOUT)
+        if self._wait_for_wlm_application(running=False, timeout=graceful_timeout):
+            return
+
+        running_processes = self._running_wlm_process_names()
+        if not running_processes:
+            self.log.warning(
+                "The HighFinesse DLL still reports a running WLM application, "
+                "but no WLM process was found. Continuing with restart."
+            )
+            return
+
+        if not self._allow_force_process_kill:
+            raise TimeoutError(
+                "Timed out while waiting for the HighFinesse WLM application to exit "
+                "through ControlWLM. Force-killing wlm_ws*.exe is disabled because it "
+                "can leave the vendor app in a crashing state. Close the WLM application "
+                "manually, or set 'allow_force_process_kill: true' in the wavemeter proxy "
+                "options if you accept that risk."
+            )
+
+        self.log.warning(
+            "HighFinesse WLM did not exit through ControlWLM. "
+            f"Terminating process(es): {', '.join(running_processes)}."
+        )
+        self._terminate_wlm_processes(running_processes)
+
+        remaining_timeout = max(0.0, deadline - time.monotonic())
+        force_timeout = max(1.0, min(5.0, remaining_timeout))
+        if not self._wait_for_wlm_processes(running=False, timeout=force_timeout):
+            raise TimeoutError(
+                "Timed out while waiting for the HighFinesse WLM process to terminate."
+            )
+
+    def _start_wlm_application(self, timeout: float, start_silent: bool) -> None:
+        deadline = time.monotonic() + timeout
+        action = high_finesse_constants.cCtrlWLMShow | high_finesse_constants.cCtrlWLMWait
+        if start_silent:
+            action |= high_finesse_constants.cCtrlWLMStartSilent
+
+        result = self._wavemeter_dll.ControlWLM(action, None, 0)
+        if result:
+            self.log.debug(f"ControlWLM start returned {result}.")
+
+        dll_start_timeout = min(timeout, WLM_GRACEFUL_EXIT_TIMEOUT)
+        if self._wait_for_wlm_application(running=True, timeout=dll_start_timeout):
+            return
+
+        if self._wait_for_wlm_processes(running=True, timeout=0.5):
+            self._reload_wavemeter_dll()
+            remaining_timeout = max(1.0, deadline - time.monotonic())
+            if self._wait_for_wlm_application(running=True, timeout=remaining_timeout):
+                return
+
+        if not self._allow_direct_process_start:
+            raise TimeoutError(
+                "Timed out while waiting for the HighFinesse WLM application to start "
+                "through ControlWLM. Direct executable start is disabled because starting "
+                "wlm_ws*.exe while a previous start is still pending can crash the vendor app. "
+                "Set 'allow_direct_process_start: true' only if ControlWLM cannot start WLM "
+                "and no WLM process is already running."
+            )
+
+        executable_path = self._find_wlm_executable_path()
+        if executable_path is None:
+            raise TimeoutError(
+                "Timed out while waiting for the HighFinesse WLM application and "
+                "could not find a WLM executable to start directly. Configure "
+                "'wavemeter_executable_path' for the wavemeter proxy."
+            )
+
+        self.log.warning(
+            "HighFinesse WLM did not start through ControlWLM. "
+            f"Starting executable directly: {executable_path}."
+        )
+        self._start_wlm_process(executable_path)
+        time.sleep(1.0)
+
+        self._reload_wavemeter_dll()
+        remaining_timeout = max(1.0, deadline - time.monotonic())
+        if not self._wait_for_wlm_application(running=True, timeout=remaining_timeout):
+            raise TimeoutError("Timed out while waiting for the HighFinesse WLM application.")
+
+    def _reload_wavemeter_dll(self) -> None:
+        self._wavemeter_dll = load_dll()
+        try:
+            setup_dll(self._wavemeter_dll)
+        except AttributeError:
+            self.log.warning("One or more function is not available. The wavemeter version is likely outdated.")
+
+    def _wait_for_wlm_application(self, running: bool, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._is_wlm_application_running() == running:
+                return True
+            time.sleep(0.2)
+        return False
+
+    def _is_wlm_application_running(self) -> bool:
+        try:
+            version = self._wavemeter_dll.GetWLMVersion(0)
+        except Exception:
+            return False
+        return version != high_finesse_constants.GetFrequencyError.ErrWlmMissing.value
+
+    def _wait_for_wlm_processes(self, running: bool, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if bool(self._running_wlm_process_names()) == running:
+                return True
+            time.sleep(0.2)
+        return False
+
+    def _running_wlm_process_names(self) -> List[str]:
+        running_processes = []
+        for process_name in WLM_PROCESS_NAMES:
+            if self._is_process_running(process_name):
+                running_processes.append(process_name)
+        return running_processes
+
+    @staticmethod
+    def _is_process_running(process_name: str) -> bool:
+        try:
+            completed_process = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {process_name}", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except Exception:
+            return False
+
+        return process_name.lower() in completed_process.stdout.lower()
+
+    def _terminate_wlm_processes(self, process_names: List[str]) -> None:
+        for process_name in process_names:
+            try:
+                completed_process = subprocess.run(
+                    ["taskkill", "/IM", process_name, "/T", "/F"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except Exception:
+                self.log.exception(f"Failed to terminate {process_name}.")
+            else:
+                if completed_process.returncode:
+                    self.log.warning(
+                        f"taskkill failed for {process_name}: "
+                        f"{completed_process.stderr.strip() or completed_process.stdout.strip()}"
+                    )
+
+    def _find_wlm_executable_path(self) -> Optional[str]:
+        configured_path = self._wavemeter_executable_path
+        if configured_path:
+            configured_path = os.path.expandvars(os.path.expanduser(configured_path))
+            if os.path.isfile(configured_path):
+                self._last_wlm_executable_path = configured_path
+                return configured_path
+            self.log.warning(f"Configured wavemeter executable does not exist: {configured_path}")
+
+        if self._last_wlm_executable_path and os.path.isfile(self._last_wlm_executable_path):
+            return self._last_wlm_executable_path
+
+        install_roots = (
+            os.path.join(os.environ.get("ProgramFiles(x86)", ""), "HighFinesse"),
+            os.path.join(os.environ.get("ProgramFiles", ""), "HighFinesse"),
+        )
+        process_names = {name.lower() for name in WLM_PROCESS_NAMES}
+        candidates = []
+        for install_root in install_roots:
+            if not install_root or not os.path.isdir(install_root):
+                continue
+            for root, _, files in os.walk(install_root):
+                for filename in files:
+                    if filename.lower() in process_names:
+                        candidates.append(os.path.join(root, filename))
+
+        if not candidates:
+            return None
+
+        candidates.sort(reverse=True)
+        self._last_wlm_executable_path = candidates[0]
+        return candidates[0]
+
+    def _start_wlm_process(self, executable_path: str) -> None:
+        try:
+            subprocess.Popen(
+                [executable_path],
+                cwd=os.path.dirname(executable_path),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Failed to start HighFinesse WLM executable: {executable_path}") from exc
+
     def _activate_channel(self, ch: int) -> None:
-        """ Activate a channel on the multi-channel switch. """
+        """Activate a channel on the multi-channel switch."""
         if not self._wm_has_switch:
             if ch == 1:
                 return
             else:
-                raise RuntimeError(f'Cannot activate channel {ch}: wavemeter does not have a multi-channel switch.')
+                raise RuntimeError(f"Cannot activate channel {ch}: wavemeter does not have a multi-channel switch.")
 
         err = self._wavemeter_dll.SetSwitcherSignalStates(ch, 1, 1)
         if err:
-            raise RuntimeError(
-                f'Wavemeter error while activating channel {ch}: {high_finesse_constants.ResultError(err)}'
-            )
+            raise RuntimeError(f"Wavemeter error while activating channel {ch}: {high_finesse_constants.ResultError(err)}")
 
     def _deactivate_channel(self, ch: int) -> None:
-        """ Deactivate a channel on the multi-channel switch. """
+        """Deactivate a channel on the multi-channel switch."""
         if not self._wm_has_switch:
             if ch == 1:
                 return
             else:
-                raise RuntimeError(f'Cannot deactivate channel {ch}: wavemeter does not have a multi-channel switch.')
+                raise RuntimeError(f"Cannot deactivate channel {ch}: wavemeter does not have a multi-channel switch.")
 
         err = self._wavemeter_dll.SetSwitcherSignalStates(ch, 0, 0)
         if err:
-            raise RuntimeError(f'Wavemeter error while deactivating channel {ch}: '
-                               f'{high_finesse_constants.ResultError(err)}')
+            raise RuntimeError(f"Wavemeter error while deactivating channel {ch}: " f"{high_finesse_constants.ResultError(err)}")
 
     def _activate_only_connected_channels(self) -> None:
         """Activate all channels active on a connected instreamer and disable all others."""
         connected_channels = self.get_connected_channels()
         if not connected_channels:
-            raise RuntimeError('Cannot deactivate all channels.')
+            raise RuntimeError("Cannot deactivate all channels.")
 
         for ch in connected_channels:
             self._activate_channel(ch)
@@ -288,12 +610,44 @@ class HighFinesseProxy(Base):
             self._wavemeter_dll.SetSwitcherMode(True)
         err = self._wavemeter_dll.Operation(high_finesse_constants.cCtrlStartMeasurement)
         if err:
-            raise RuntimeError(f'Wavemeter error while starting measurement: {high_finesse_constants.ResultError(err)}')
+            raise RuntimeError(f"Wavemeter error while starting measurement: {high_finesse_constants.ResultError(err)}")
 
-    def _stop_measurement(self) -> None:
-        err = self._wavemeter_dll.Operation(high_finesse_constants.cCtrlStopAll)
+    def get_laser_piezo_voltage(self, ch: int) -> float:
+        return self._wavemeter_dll.GetDeviationSignal(ch)
+
+    def set_laser_piezo_voltage(self, voltage: float) -> None:
+        err = self._wavemeter_dll.SetDeviationSignal(voltage)
         if err:
-            raise RuntimeError(f'Wavemeter error while stopping measurement: {high_finesse_constants.ResultError(err)}')
+            raise RuntimeError(f"Could not set laser piezo voltage: {high_finesse_constants.ResultError(err)}")
+
+    #### Implementing slowly options to trigger the lock
+    def toggle_locking(self, state: bool) -> None:
+        err = self._wavemeter_dll.SetDeviationMode(state)
+        if err:
+            raise RuntimeError(f"Could not start or stop locking: {high_finesse_constants.ResultError(err)}")
+
+    def set_reference_wavelength(self, wavelength: float) -> None:
+        # TODO: The unit is the unit selected in the software and not always wavelegnth in nm!!!
+        print(str(wavelength).replace(".", ",").encode(encoding="utf-8"))
+        buffer_wavelength = ctypes.create_string_buffer(str(wavelength).replace(".", ",").encode(encoding="utf-8"))
+        err = self._wavemeter_dll.SetPIDCourse(buffer_wavelength)  # nm
+        err2 = self._wavemeter_dll.SetDeviationReference(wavelength)
+        if err:
+            raise RuntimeError(f"Could not set reference wavelength: {high_finesse_constants.ResultError(err)}")
+        if err2:
+            raise RuntimeError(f"Could not set reference wavelength: {high_finesse_constants.ResultError(err2)}")
+
+    def get_reference_wavelength(self, offset=0) -> float:
+        # doesn't work (or I'm, which is more likly, stupid). Returns always wrong value and doesnt react to changes
+        # TODO: The unit is the unit selected in the software and not always wavelegnth in nm!!!
+        buffer = ctypes.create_string_buffer(50)
+        err = self._wavemeter_dll.GetPIDCourse(buffer)  # nm
+        if err:
+            raise RuntimeError(f"Could not get reference wavelength: {high_finesse_constants.ResultError(err)}")
+
+        return float(buffer.value.decode("utf-8").replace(",", "."))
+
+    ####
 
     def _set_up_watchdog(self) -> None:
         self._watchdog_thread = self._thread_manager.get_new_thread(THREAD_NAME_WATCHDOG)
@@ -308,28 +662,29 @@ class HighFinesseProxy(Base):
         del self._watchdog
 
     def _start_callback(self) -> None:
-        """ Start the callback procedure. """
+        """Start the callback procedure."""
         self._callback_function = self._get_callback_function()
         self._wavemeter_dll.Instantiate(
             high_finesse_constants.cInstNotification,  # long ReasonForCall
             high_finesse_constants.cNotifyInstallCallbackEx,  # long Mode
             cast(self._callback_function, POINTER(c_long)),  # long P1: function
-            0  # long P2: callback thread priority, 0 = standard
+            0,  # long P2: callback thread priority, 0 = standard
         )
         self.module_state.lock()
-        self.log.debug('Started callback procedure.')
+        self.log.debug("Started callback procedure.")
 
     def _stop_callback(self) -> None:
-        """ Stop the callback procedure. """
+        """Stop the callback procedure."""
         self._wavemeter_dll.Instantiate(
             high_finesse_constants.cInstNotification,  # long ReasonForCall
             high_finesse_constants.cNotifyRemoveCallback,  # long mode
             cast(self._callback_function, POINTER(c_long)),
             # long P1: function
-            0)  # long P2: callback thread priority, 0 = standard
+            0,
+        )  # long P2: callback thread priority, 0 = standard
         self._callback_function = None
         self.module_state.unlock()
-        self.log.debug('Stopped callback procedure.')
+        self.log.debug("Stopped callback procedure.")
 
     def _get_callback_function(self) -> WINFUNCTYPE:
         """
@@ -337,6 +692,7 @@ class HighFinesseProxy(Base):
         is available or any of the wavelength meter's states changes.
         :return: callback function
         """
+
         def handle_callback(version, mode: int, intval: int, dblval: float, res1) -> int:
             """
             Function called upon wavelength meter state change or if a new measurement result is available.
@@ -356,15 +712,15 @@ class HighFinesseProxy(Base):
             """
             # check if an evil user messed with the manufacturer GUI
             if mode == high_finesse_constants.cmiOperation and intval == high_finesse_constants.cStop:
-                self.log.warning('Wavemeter acquisition was stopped during stream.')
+                self.log.warning("Wavemeter acquisition was stopped during stream.")
                 self.error_in_callback = True
                 return 0
             elif mode == high_finesse_constants.cmiSwitcherMode:
-                self.log.warning('Wavemeter switcher mode was changed during stream.')
+                self.log.warning("Wavemeter switcher mode was changed during stream.")
                 self.error_in_callback = True
                 return 0
             elif mode == high_finesse_constants.cmiPulseMode:
-                self.log.warning('Wavemeter pulse mode was changed during stream.')
+                self.log.warning("Wavemeter pulse mode was changed during stream.")
                 self.error_in_callback = True
                 return 0
 
@@ -381,9 +737,13 @@ class HighFinesseProxy(Base):
             else:
                 wavelength = 1e-9 * dblval  # measurement is in nm
             timestamp = 1e-3 * intval  # wavemeter records timestamps in ms
-            for instreamer, channels in self._connected_instream_modules.items():
+            for instreamer, channels in list(self._connected_instream_modules.items()):
                 if ch in channels:
-                    instreamer.process_new_wavelength(ch, wavelength, timestamp)
+                    try:
+                        instreamer.process_new_wavelength(ch, wavelength, timestamp)
+                    except Exception:
+                        self.log.exception("Error while processing wavemeter callback.")
+                        self.error_in_callback = True
             return 0
 
         _CALLBACK = WINFUNCTYPE(c_int, c_long, c_long, c_long, c_double, c_long)

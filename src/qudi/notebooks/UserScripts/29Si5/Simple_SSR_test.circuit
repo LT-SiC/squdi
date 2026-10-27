@@ -1,0 +1,230 @@
+{
+  "version": "1.0",
+  "title": "Simple_SSR_test",
+  "qubit_labels": [
+    "electron",
+    "Si1"
+  ],
+  "qubit_meta": [
+    {
+      "spin": "3/2"
+    },
+    {
+      "spin": "1/2"
+    }
+  ],
+  "local_gate_defs": [],
+  "placements": [
+    {
+      "id": "b69c6104-d869-484a-8525-927bf5f77b7d",
+      "gate_def_id": "97079db5-ddeb-431c-bb62-55beb397647f",
+      "col": 3,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "freqs": "nuc_freqs",
+        "read_dur": "1024"
+      },
+      "use_default": {
+        "freqs": true,
+        "read_dur": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "431b6f8c-b3d4-4975-a0c5-7e94142a5e77",
+      "gate_def_id": "ec35de28-7f19-4808-a2e2-977fe22256b6",
+      "col": 0,
+      "role_to_row": {
+        "qubit": 0
+      },
+      "arg_values": {
+        "state": "_I_[\"state\"]"
+      },
+      "use_default": {
+        "state": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "328ba19f-677b-4411-b8c8-cd98e6e5168a",
+      "gate_def_id": "c1606dd0-4c33-4960-b6f1-b3003b82fb0c",
+      "col": 5,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "freqs": "nuc_freqs",
+        "read_dur": "1024"
+      },
+      "use_default": {
+        "freqs": true,
+        "read_dur": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "e0011b54-b213-4e60-b71b-9d85c298a084",
+      "gate_def_id": "4200713a-c2cf-4b08-af57-ed682827a390",
+      "col": 6,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "dur": "100"
+      },
+      "use_default": {
+        "dur": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "8b41fc49-5b6f-4e12-a116-4fd2542a12fd",
+      "gate_def_id": "b0b63b43-a0ab-4bd4-8a05-992e636fcb63",
+      "col": 2,
+      "role_to_row": {
+        "nuclear": 1,
+        "electron": 0
+      },
+      "arg_values": {
+        "amp": "_I_[\"cnot_amp\"]",
+        "pi_dur": "_I_[\"pi_dur\"]",
+        "transition": "\"low\""
+      },
+      "use_default": {
+        "amp": true,
+        "pi_dur": true,
+        "transition": true
+      },
+      "control_states": {
+        "nuclear": "ms=+1/2"
+      }
+    },
+    {
+      "id": "5dba4ac0-acd5-4d03-a760-114f43e5f1b3",
+      "gate_def_id": "010657cc-39ea-4168-92bd-ba34d23b974b",
+      "col": 1,
+      "role_to_row": {
+        "electron": 0,
+        "nuclear": 1
+      },
+      "arg_values": {
+        "si1_freq": "si1_freq",
+        "freq1": "nuc_freq",
+        "amp1": "_I_[\"rf_amp_rabi\"]",
+        "dur1": "_I_[\"rf_dur_rabi\"]",
+        "phase": "0"
+      },
+      "use_default": {
+        "si1_freq": true,
+        "freq1": true,
+        "amp1": true,
+        "dur1": true,
+        "phase": true
+      },
+      "control_states": {
+        "electron": "ms=-1/2"
+      }
+    },
+    {
+      "id": "b3e209dc-c9f1-446e-b81c-1e4a2be609e4",
+      "gate_def_id": "ec35de28-7f19-4808-a2e2-977fe22256b6",
+      "col": 4,
+      "role_to_row": {
+        "qubit": 0
+      },
+      "arg_values": {
+        "state": "_I_[\"state\"]"
+      },
+      "use_default": {
+        "state": true
+      },
+      "control_states": {}
+    }
+  ],
+  "parameters": [
+    {
+      "name": "sweeps",
+      "value_expr": "range(20)"
+    },
+    {
+      "name": "n_ssr1",
+      "value_expr": "[3000]"
+    },
+    {
+      "name": "n_ssr2",
+      "value_expr": "[3000]"
+    },
+    {
+      "name": "state",
+      "value_expr": "['0']"
+    },
+    {
+      "name": "init_power",
+      "value_expr": "[1.0]"
+    },
+    {
+      "name": "rf_dur_rabi",
+      "value_expr": "[-1]"
+    },
+    {
+      "name": "rf_amp_rabi",
+      "value_expr": "[*np.linspace(0, 0.9, 10)]"
+    },
+    {
+      "name": "cnot_amp",
+      "value_expr": "[0.5]"
+    },
+    {
+      "name": "pi_dur",
+      "value_expr": "[100]"
+    },
+    {
+      "name": "transition",
+      "value_expr": "['low']"
+    },
+    {
+      "name": "ddrf_dur",
+      "value_expr": "[1000]"
+    },
+    {
+      "name": "ddrf_amp",
+      "value_expr": "[0.3]"
+    }
+  ],
+  "ana_seq": [
+    {
+      "kind": "result",
+      "comparison": ">",
+      "threshold": 9,
+      "nlp": 0,
+      "delta": 0,
+      "n_results": 1,
+      "comment": ""
+    },
+    {
+      "kind": "result",
+      "comparison": ">",
+      "threshold": 9,
+      "nlp": 0,
+      "delta": 0,
+      "n_results": 1,
+      "comment": ""
+    }
+  ],
+  "ui_state": {
+    "cell_width": 110,
+    "cell_height": 60,
+    "splitter_sizes": [
+      220,
+      1299,
+      395
+    ]
+  },
+  "preamble": "# --- Experiment preamble ---\n",
+  "fixed_middle": "results = run_experiment(nuclear.parameters)\n",
+  "pre_parameters": "nuclear.parameters = OrderedDict(\n    (\n",
+  "post_parameters": "    )\n)\n",
+  "fixed_end": "# --- End of experiment ---\n"
+}

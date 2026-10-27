@@ -5,7 +5,7 @@ from enum import Enum
 
 from qudi.core.configoption import ConfigOption
 from qudi.core.module import Base
-
+from qudi.core.statusvariable import StatusVar
 ON  = 1
 OFF = 0
 EOL = "\r\n"
@@ -15,7 +15,7 @@ class iBeamSmart(Base):
     """
     """
     port = ConfigOption(name='port', missing='error')
-
+    _power = StatusVar('power', 0)
     channel = 2
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,9 +52,9 @@ class iBeamSmart(Base):
         
         # put laser in a consistent mode
         if self.portOK:
-            self.port.write(("echo off" % EOL).encode())   # echo off
+            self.port.write(("echo off" + EOL).encode())   # echo off
             time.sleep(0.1)
-            self.port.write(("prompt off" % EOL).encode())   # prompt off
+            self.port.write(("prompt off" + EOL).encode())   # prompt off
             time.sleep(0.1)
                 
             # clear input buffer so ready to talk to laser
@@ -164,12 +164,12 @@ class iBeamSmart(Base):
         """ Check the laser output power.
         """
         #TODO!
-        return self.power
+        return self._power
     
     def setPower(self, power):
         """ Set the laser output power in muW.
         """
-        self.power = power
+        self._power = power
         if self.portOK:
             if power <= 0:
                 power = 0.01
@@ -177,4 +177,16 @@ class iBeamSmart(Base):
                 power = 100000
             self.port.write(f"ch pow {power} mic {EOL}".encode())
       
-    
+    @property
+    def power(self):
+        return self._power
+
+    @power.setter
+    def power(self, power):
+        if self.portOK:
+            if power <= 0:
+                power = 0.01
+            elif power >= 100000:
+                power = 100000
+            self.port.write(f"ch pow {power} mic {EOL}".encode())
+        self._power = power

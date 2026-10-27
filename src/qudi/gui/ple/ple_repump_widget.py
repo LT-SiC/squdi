@@ -1,9 +1,7 @@
 
-from PySide2 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 import qudi.util.uic as uic
 import os
-from qudi.util.widgets.scientific_spinbox import ScienDSpinBox
-import pyqtgraph as pg
 
 class PlePulsedWidget(QtWidgets.QWidget):
     sig_pulser_params_updated = QtCore.Signal(dict)

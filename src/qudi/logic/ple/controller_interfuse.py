@@ -19,16 +19,12 @@ You should have received a copy of the GNU Lesser General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
-from ast import Raise
 from email.policy import default
 from qudi.core.connector import Connector
 from qudi.core.module import LogicBase
 from qudi.core.configoption import ConfigOption
-from PySide2 import QtCore
-import numpy as np
+from PySide6 import QtCore
 from qudi.core.statusvariable import StatusVar
-from qudi.util.delay import delay
-import time
 
 class ControllerInterfuseLogic(LogicBase):
     sigGuiParamsUpdated = QtCore.Signal(object,  QtCore.Qt.QueuedConnection)

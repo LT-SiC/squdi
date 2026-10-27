@@ -195,7 +195,7 @@ class PulsedMeasurementGui(GuiBase):
             parent=self._mw,
             fit_config_model=self.pulsedmasterlogic().fit_config_model
         )
-        self._restore_window_geometry(self._mw)
+
         self._mw.tabWidget.addTab(self._pa, 'Analysis')
         self._mw.tabWidget.addTab(self._pe, 'Pulse Extraction')
         self._mw.tabWidget.addTab(self._pg, 'Pulse Generator')
@@ -282,8 +282,7 @@ class PulsedMeasurementGui(GuiBase):
 
         self.sigPulseGeneratorSettingsUpdated.disconnect()
         self.sigPulseGeneratorRunBenchmark.disconnect()
-        # self.save_view()
-        self._save_window_geometry(self._mw)
+        self.save_view()
         self._mw.close()
         return
 

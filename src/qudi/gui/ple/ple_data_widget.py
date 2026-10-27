@@ -22,14 +22,12 @@ If not, see <https://www.gnu.org/licenses/>.
 __all__ = ['PLEDataWidget']
 
 import pyqtgraph as pg
-from typing import Tuple, Union, Sequence
-from typing import Optional, List
-from PySide2 import QtCore
-from PySide2 import QtWidgets
+from typing import Tuple
+from typing import Optional
+from PySide6 import QtCore
+from PySide6 import QtWidgets
 import numpy as np
 from qudi.util.colordefs import QudiPalettePale as palette
-from qudi.util.widgets.toggle_switch import ToggleSwitch
-from qudi.util.widgets.scientific_spinbox import ScienDSpinBox
 from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
 
 class PLEDataWidget(QtWidgets.QWidget):
@@ -79,14 +77,19 @@ class PLEDataWidget(QtWidgets.QWidget):
         self.plot_widget.setMinimumHeight(50)
         main_layout.addWidget(self.plot_widget)
 
-
         self._scan_data = None
+        self._x_data = None
 
-    def set_scan_data(self, data: ScanData) -> None:
+    def set_x_axis(self, label: str, unit: str) -> None:
+        self.plot_widget.setLabel('bottom', text=label, units=unit)
+
+    def set_scan_data(self, plot_data, data: ScanData, x_data=None) -> None:
         # Save reference for channel changes
         update_range = (self._scan_data is None) or (self._scan_data.scan_range != data.scan_range) \
                         or (self._scan_data.scan_resolution != data.scan_resolution)
         self._scan_data = data
+        self._plot_data = plot_data
+        self._x_data = x_data
         # Set data
         self._update_scan_data(update_range=update_range)
     
@@ -98,7 +101,6 @@ class PLEDataWidget(QtWidgets.QWidget):
     def channel(self, ch):
         self._channel = ch
         self.plot_widget.setLabel('left', text=ch.name, units=ch.unit)
-        self.plot_widget.setLabel('bottom', text=self.axis.name.title(), units=self.axis.unit)
         self._update_scan_data(False)
 
     def set_fit_data(self, frequency, data):
@@ -110,18 +112,21 @@ class PLEDataWidget(QtWidgets.QWidget):
     #!! TODO choose CHANNEL
     def _update_scan_data(self, update_range: bool) -> None:
         current_channel = self._channel.name #or APD events ?? or time tagger #!TODO!
-        if (self._scan_data is None) or (self._scan_data.data is None):
+        if (self._scan_data is None) or (self._plot_data is None):
             self.data_curve.clear()
+
         else:
-            if update_range:
+            x_data = self._x_data
+            if x_data is None:
                 x_data = np.linspace(*self._scan_data.scan_range[0],
-                                     self._scan_data.scan_resolution[0])
-                self.data_curve.setData(y=self._scan_data.data[current_channel], x=x_data)
-                self.selected_region.setRegion(self._scan_data.scan_range[0])
+                                         self._scan_data.scan_resolution[0])
+            if update_range:
+                self.data_curve.setData(y=self._plot_data[current_channel], x=x_data)
+                self.selected_region.setRegion((float(x_data[0]), float(x_data[-1])))
                 # self.target_point.setValue(self._scan_data.scan_range[0][0])
             else:
-                self.data_curve.setData(y=self._scan_data.data[current_channel],
-                                       x=self.data_curve.xData)
+                self.data_curve.setData(y=self._plot_data[current_channel],
+                                       x=x_data)#self.data_curve.xData)
 
 class CustomAxis(pg.AxisItem):
     """ This is a CustomAxis that extends the normal pyqtgraph to be able to nudge the axis labels.
@@ -160,5 +165,4 @@ class CustomAxis(pg.AxisItem):
             p.setY(int(self.size().height() - br.height() + nudge))
         self.label.setPos(p)
         self.picture = None
-
 

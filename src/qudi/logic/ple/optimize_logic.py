@@ -20,21 +20,16 @@ You should have received a copy of the GNU Lesser General Public License along w
 If not, see <https://www.gnu.org/licenses/>.
 """
 
+import copy as cp
 
 import numpy as np
-from PySide2 import QtCore
-import itertools
-import copy as cp
-import time
-
-from qudi.core.module import LogicBase
-from qudi.util.mutex import RecursiveMutex
+from PySide6 import QtCore
 from qudi.core.connector import Connector
-from qudi.core.configoption import ConfigOption
+from qudi.core.module import LogicBase
 from qudi.core.statusvariable import StatusVar
-from qudi.util.fit_models.gaussian import Gaussian2D, Gaussian
+from qudi.util.fit_models.gaussian import Gaussian, Gaussian2D
 from qudi.util.fit_models.lorentzian import Lorentzian
-from qudi.interface.scanning_probe_interface import ScanData
+from qudi.util.mutex import RecursiveMutex
 
 
 class PLEOptimizeScannerLogic(LogicBase):
@@ -51,29 +46,30 @@ class PLEOptimizeScannerLogic(LogicBase):
     """
 
     # declare connectors
-    _scan_logic = Connector(name='scan_logic', interface='PLEScannerLogic')
+    _scan_logic = Connector(name="scan_logic", interface="PLEScannerLogic")
 
     # config options
 
     # status variables
-    _scan_sequence = StatusVar(name='scan_sequence', default=None)
-    _data_channel = StatusVar(name='data_channel', default=None)
-    _scan_frequency = StatusVar(name='scan_frequency', default=None)
-    _scan_range = StatusVar(name='scan_range', default=None)
-    _scan_resolution = StatusVar(name='scan_resolution', default=None)
-
+    _scan_sequence = StatusVar(name="scan_sequence", default=None)
+    _data_channel = StatusVar(name="data_channel", default=None)
+    _scan_frequency = StatusVar(name="scan_frequency", default=None)
+    _scan_range = StatusVar(name="scan_range", default=None)
+    _scan_resolution = StatusVar(name="scan_resolution", default=None)
+    _min_r_squared = StatusVar(name="min_r_squared", default=0.02)
+    _tracking_period = StatusVar(name="tracking_period", default=5000)
     # signals
     sigOptimizeStateChanged = QtCore.Signal(bool, dict, object)
     sigOptimizeSettingsChanged = QtCore.Signal(dict)
     sigOptimizeDone = QtCore.Signal()
-
+    sigTrackPle = QtCore.Signal(bool)
     _sigNextSequenceStep = QtCore.Signal()
 
     def __init__(self, config, **kwargs):
         super().__init__(config=config, **kwargs)
 
         self._thread_lock = RecursiveMutex()
-
+        self.stopRequested = False
         self._stashed_scan_settings = dict()
         self._sequence_index = 0
         self._optimal_position = dict()
@@ -81,8 +77,7 @@ class PLEOptimizeScannerLogic(LogicBase):
         return
 
     def on_activate(self):
-        """ Initialisation performed during activation of the module.
-        """
+        """Initialisation performed during activation of the module."""
         axes = self._scan_logic().scanner_axes
         channels = self._scan_logic().scanner_channels
         try:
@@ -93,30 +88,33 @@ class PLEOptimizeScannerLogic(LogicBase):
         except:
             self._max_move_velocity = None
 
-        self.log.debug(f"Opt settings at startup, type {type(self._scan_range)} {self._scan_range, self._scan_resolution}")
+        self.log.debug(
+            f"Opt settings at startup, type {type(self._scan_range)} {self._scan_range, self._scan_resolution}"
+        )
 
         self._avail_axes = tuple(axes.values())
         if self._scan_sequence is None:
             if len(self._avail_axes) >= 3:
-                self._scan_sequence = [(self._avail_axes[0].name, self._avail_axes[1].name),
-                                       (self._avail_axes[2].name,)]
+                self._scan_sequence = [
+                    (self._avail_axes[0].name, self._avail_axes[1].name),
+                    (self._avail_axes[2].name,),
+                ]
             elif len(self._avail_axes) == 2:
                 self._scan_sequence = [(self._avail_axes[0].name, self._avail_axes[1].name)]
             elif len(self._avail_axes) == 1:
                 self._scan_sequence = [(self._avail_axes[0].name,)]
             else:
                 self._scan_sequence = list()
-        
+
         if self._data_channel is None:
             self._data_channel = tuple(channels.values())[0].name
 
         # check nd correct optimizer settings loaded from StatusVar
         new_settings = self.check_sanity_optimizer_settings(self.optimize_settings)
         if new_settings != self.optimize_settings:
-            self._scan_range = new_settings['scan_range']
-            self._scan_resolution = new_settings['scan_resolution']
-            self._scan_frequency = new_settings['scan_frequency']
-
+            self._scan_range = new_settings["scan_range"]
+            self._scan_resolution = new_settings["scan_resolution"]
+            self._scan_frequency = new_settings["scan_frequency"]
 
         self._stashed_scan_settings = dict()
         self._sequence_index = 0
@@ -126,11 +124,14 @@ class PLEOptimizeScannerLogic(LogicBase):
         self._scan_logic().sigScanStateChanged.connect(
             self._scan_state_changed, QtCore.Qt.QueuedConnection
         )
+        self._ple_tracking_timer = QtCore.QTimer()
+        self._ple_tracking_timer.setSingleShot(False)
+        self._ple_tracking_timer.timeout.connect(self.start_optimize, QtCore.Qt.QueuedConnection)
+        self.sigTrackPle.connect(self.enable_ple_tracking, QtCore.Qt.QueuedConnection)
         return
 
     def on_deactivate(self):
-        """ Reverse steps of activation
-        """
+        """Reverse steps of activation"""
         self._scan_logic().sigScanStateChanged.disconnect(self._scan_state_changed)
         self._sigNextSequenceStep.disconnect()
         # self.stop_optimize()
@@ -142,15 +143,15 @@ class PLEOptimizeScannerLogic(LogicBase):
 
     @property
     def scan_frequency(self):
-        return self._scan_frequency.copy() if self._scan_frequency!=None else None
+        return self._scan_frequency.copy() if self._scan_frequency != None else None
 
     @property
     def scan_range(self):
-        return self._scan_range.copy() if self._scan_range!=None else None
+        return self._scan_range.copy() if self._scan_range != None else None
 
     @property
     def scan_resolution(self):
-        return self._scan_resolution.copy() if self._scan_resolution!= None else None
+        return self._scan_resolution.copy() if self._scan_resolution != None else None
 
     @property
     def scan_sequence(self):
@@ -166,22 +167,26 @@ class PLEOptimizeScannerLogic(LogicBase):
         list(axs_flat.extend(item) for item in sequence)
         avail_axes = [ax.name for ax in self._avail_axes]
         if not all(elem in avail_axes for elem in axs_flat):
-            raise ValueError(f"Optimizer sequence {sequence} must contain only"
-                             f" available axes ({avail_axes})")
+            raise ValueError(
+                f"Optimizer sequence {sequence} must contain only available axes ({avail_axes})"
+            )
 
         self._scan_sequence = sequence
 
     @property
     def optimizer_running(self):
-        return self.module_state() != 'idle'
+        return self.module_state() != "idle"
 
     @property
     def optimize_settings(self):
-        return {'scan_frequency': self.scan_frequency,
-                'data_channel': self._data_channel,
-                'scan_range': self.scan_range,
-                'scan_resolution': self.scan_resolution,
-                'scan_sequence': self.scan_sequence}
+        return {
+            "scan_frequency": self.scan_frequency,
+            "data_channel": self._data_channel,
+            "scan_range": self.scan_range,
+            "scan_resolution": self.scan_resolution,
+            "scan_sequence": self.scan_sequence,
+            "tracking_period": self._tracking_period,
+        }
 
     def check_sanity_optimizer_settings(self, settings=None):
         # shaddows scanning_probe_logic::check_sanity. Unify code somehow?
@@ -205,69 +210,76 @@ class PLEOptimizeScannerLogic(LogicBase):
 
             return is_valid
 
-
         # first check settings that are defined per scanner axis
         for key, val in settings.items():
             if not check_valid(settings, key):
-                if key == 'scan_range':
-                    settings['scan_range'] = {ax.name: abs(ax.value_range[1] - ax.value_range[0]) / 100 for ax in
-                                              hw_axes.values()}
-                if key == 'scan_resolution':
-                    settings['scan_resolution'] = {ax.name: max(ax.min_resolution, min(16, ax.max_resolution))
-                                                   for ax in hw_axes.values()}
-                if key == 'scan_frequency':
-                    settings['scan_frequency'] = {ax.name: max(ax.min_frequency, min(50, ax.max_frequency)) for ax
-                                                  in hw_axes.values()}
-                if key == 'data_channel':
-                    settings['data_channel'] = list(sig_channels.keys())[0]
-
+                if key == "scan_range":
+                    settings["scan_range"] = {
+                        ax.name: abs(ax.value_range[1] - ax.value_range[0]) / 100
+                        for ax in hw_axes.values()
+                    }
+                if key == "scan_resolution":
+                    settings["scan_resolution"] = {
+                        ax.name: max(ax.min_resolution, min(16, ax.max_resolution))
+                        for ax in hw_axes.values()
+                    }
+                if key == "scan_frequency":
+                    settings["scan_frequency"] = {
+                        ax.name: max(ax.min_frequency, min(50, ax.max_frequency))
+                        for ax in hw_axes.values()
+                    }
+                if key == "data_channel":
+                    settings["data_channel"] = list(sig_channels.keys())[0]
+                if key == "tracking_period":
+                    settings["tracking_period"] = self._tracking_period
 
         # scan_sequence check, only sensibel if plot dimensions (eg. from confocal gui) are available
-        if 'scan_sequence' in settings:
+        if "scan_sequence" in settings:
             dummy_seq = OptimizerScanSequence(tuple(self._scan_logic().scanner_axes.keys()))
 
             if len(dummy_seq.available_opt_sequences) == 0:
-                raise ValueError(f"Configured optimizer"
-                                 f" doesn't yield any sensible scan sequence.")
+                raise ValueError("Configured optimizer doesn't yield any sensible scan sequence.")
 
-            if settings['scan_sequence'] not in [seq.sequence for seq in dummy_seq.available_opt_sequences]:
+            if settings["scan_sequence"] not in [
+                seq.sequence for seq in dummy_seq.available_opt_sequences
+            ]:
                 new_seq = dummy_seq.available_opt_sequences[0].sequence
-                settings['scan_sequence'] = new_seq
+                settings["scan_sequence"] = new_seq
 
         return settings
-
 
     @property
     def optimal_position(self):
         return self._optimal_position.copy()
 
     def set_optimize_settings(self, settings):
-        """
-        """
+        """ """
         with self._thread_lock:
-            if self.module_state() != 'idle':
+            if self.module_state() != "idle":
                 settings_update = self.optimize_settings
-                self.log.error('Can not change optimize settings when module is locked.')
+                self.log.error("Can not change optimize settings when module is locked.")
             else:
                 settings_update = dict()
-                if 'scan_frequency' in settings:
-                    self._scan_frequency.update(settings['scan_frequency'])
-                    settings_update['scan_frequency'] = self.scan_frequency
-                if 'data_channel' in settings:
-                    self._data_channel = settings['data_channel']
-                    settings_update['data_channel'] = self._data_channel
-                if 'scan_range' in settings:
-                    self._scan_range.update(settings['scan_range'])
-                    settings_update['scan_range'] = self.scan_range
-                if 'scan_resolution' in settings:
-                    self._scan_resolution.update(settings['scan_resolution'])
-                    settings_update['scan_resolution'] = self.scan_resolution
-                if 'scan_sequence' in settings:
-                    self.scan_sequence = settings['scan_sequence']
-                    settings_update['scan_sequence'] = self.scan_sequence
-                    
+                if "scan_frequency" in settings:
+                    self._scan_frequency.update(settings["scan_frequency"])
+                    settings_update["scan_frequency"] = self.scan_frequency
+                if "data_channel" in settings:
+                    self._data_channel = settings["data_channel"]
+                    settings_update["data_channel"] = self._data_channel
+                if "scan_range" in settings:
+                    self._scan_range.update(settings["scan_range"])
+                    settings_update["scan_range"] = self.scan_range
+                if "scan_resolution" in settings:
+                    self._scan_resolution.update(settings["scan_resolution"])
+                    settings_update["scan_resolution"] = self.scan_resolution
+                if "scan_sequence" in settings:
+                    self.scan_sequence = settings["scan_sequence"]
+                    settings_update["scan_sequence"] = self.scan_sequence
+                if "tracking_period" in settings:
+                    self._tracking_period = settings["tracking_period"]
+                    settings_update["tracking_period"] = self._tracking_period
+
                     # self._optimizer_dim = [len(i) for i in self.scan_sequence]
-                    
 
             self.sigOptimizeSettingsChanged.emit(settings_update)
             return settings_update
@@ -278,8 +290,9 @@ class PLEOptimizeScannerLogic(LogicBase):
         return self.stop_optimize()
 
     def start_optimize(self):
+        self.optimizer_done_status = False
         with self._thread_lock:
-            if self.module_state() != 'idle':
+            if self.module_state() != "idle":
                 self.sigOptimizeStateChanged.emit(True, dict(), None)
                 return 0
 
@@ -293,15 +306,17 @@ class PLEOptimizeScannerLogic(LogicBase):
 
             # Set scan ranges
             curr_pos = self._scan_logic().scanner_target
-            optim_ranges = {ax: (pos - self._scan_range[ax] / 2, pos + self._scan_range[ax] / 2) for
-                            ax, pos in curr_pos.items()}
+            optim_ranges = {
+                ax: (pos - self._scan_range[ax] / 2, pos + self._scan_range[ax] / 2)
+                for ax, pos in curr_pos.items()
+            }
             actual_setting = self._scan_logic().set_scan_range(optim_ranges)
             # FIXME: Comparing floats by inequality here
             if any(val != optim_ranges[ax] for ax, val in actual_setting.items()):
-                self.log.warning('Some optimize scan ranges have been changed by the scanner.')
+                self.log.warning("Some optimize scan ranges have been changed by the scanner.")
                 self.module_state.unlock()
                 self.set_optimize_settings(
-                    {'scan_range': {ax: abs(r[1] - r[0]) for ax, r in actual_setting.items()}}
+                    {"scan_range": {ax: abs(r[1] - r[0]) for ax, r in actual_setting.items()}}
                 )
                 self.module_state.lock()
 
@@ -309,23 +324,24 @@ class PLEOptimizeScannerLogic(LogicBase):
             actual_setting = self._scan_logic().set_scan_frequency(self._scan_frequency)
             # FIXME: Comparing floats by inequality here
             if any(val != self._scan_frequency[ax] for ax, val in actual_setting.items()):
-                self.log.warning('Some optimize scan frequencies have been changed by the scanner.')
+                self.log.warning("Some optimize scan frequencies have been changed by the scanner.")
                 self.module_state.unlock()
-                self.set_optimize_settings({'scan_frequency': actual_setting})
+                self.set_optimize_settings({"scan_frequency": actual_setting})
                 self.module_state.lock()
 
             # Set scan resolution
             actual_setting = self._scan_logic().set_scan_resolution(self._scan_resolution)
             # FIXME: Comparing floats by inequality here
             if any(val != self._scan_resolution[ax] for ax, val in actual_setting.items()):
-                self.log.warning(
-                    'Some optimize scan resolutions have been changed by the scanner.')
+                self.log.warning("Some optimize scan resolutions have been changed by the scanner.")
                 self.module_state.unlock()
-                self.set_optimize_settings({'scan_resolution': actual_setting})
+                self.set_optimize_settings({"scan_resolution": actual_setting})
                 self.module_state.lock()
 
             # optimizer scans are never saved
-            self._scan_logic().set_scan_settings({'save_to_history': False})
+            self._scan_logic().set_scan_settings({"save_to_history": False})
+
+            # self._scan_logic()._number_of_repeats = 10
 
             self._sequence_index = 0
             self._optimal_position = dict()
@@ -338,22 +354,28 @@ class PLEOptimizeScannerLogic(LogicBase):
         # This means that for the sequence xy, z the scanner will not be on the bright spot in xy when the scan in z is started.
         # This will mess up the scan.
         # Sleeping for some time should fix it.
-        if self._max_move_velocity == None:
-            sleep_time = 0.1
-        else:
-            worst_case_distance = (self.scan_range['x']**2 + self.scan_range['y']**2 + self.scan_range['z']**2)**0.5
-            sleep_time = 2 * worst_case_distance/self._max_move_velocity + 0.1
-        time.sleep(sleep_time)
+        # if self._max_move_velocity == None:
+        #     sleep_time = 0.1
+        # else:
+        #     worst_case_distance = (
+        #         self.scan_range["x"] ** 2 + self.scan_range["y"] ** 2 + self.scan_range["z"] ** 2
+        #     ) ** 0.5
+        #     sleep_time = 2 * worst_case_distance / self._max_move_velocity + 0.1
+        # time.sleep(sleep_time)
         with self._thread_lock:
-
-            if self.module_state() == 'idle':
+            if self.module_state() == "idle":
                 return
 
-            if self._scan_logic().toggle_scan(True,
-                                              self._scan_sequence[self._sequence_index],
-                                              self.module_uuid) < 0:
-                self.log.error('Unable to start {0} scan. Optimize aborted.'.format(
-                    self._scan_sequence[self._sequence_index])
+            if (
+                self._scan_logic().toggle_scan(
+                    True, self._scan_sequence[self._sequence_index], self.module_uuid
+                )
+                < 0
+            ):
+                self.log.error(
+                    "Unable to start {0} scan. Optimize aborted.".format(
+                        self._scan_sequence[self._sequence_index]
+                    )
                 )
                 self.stop_optimize()
             return
@@ -361,42 +383,63 @@ class PLEOptimizeScannerLogic(LogicBase):
     def _scan_state_changed(self, is_running, data, caller_id):
 
         with self._thread_lock:
-            if is_running or self.module_state() == 'idle' or caller_id != self.module_uuid:
+            if is_running or self.module_state() == "idle" or caller_id != self.module_uuid:
                 return
             elif data is not None:
                 try:
+                    print(f"###### Optimize dimension {data.scan_dimension} ######")
+                    optimizer_data = self._get_accumulated_optimizer_data(data)
                     if data.scan_dimension == 1:
                         x = np.linspace(*data.scan_range[0], data.scan_resolution[0])
-                        opt_pos, fit_data, fit_res = self._get_pos_from_1d_gauss_fit(
-                            x,
-                            data.data[self._data_channel]
+                        opt_pos, fit_data, fit_res = self._get_pos_from_1d_lorentian_fit(
+                            x, optimizer_data
                         )
+                        position_update = {data.scan_axes[0]: opt_pos[0]}
                     else:
                         x = np.linspace(*data.scan_range[0], data.scan_resolution[0])
-                        y = np.linspace(*data.scan_range[1], data.scan_resolution[1])
-                        xy = np.meshgrid(x, y, indexing='ij')
-                        opt_pos, fit_data, fit_res = self._get_pos_from_2d_gauss_fit(
-                            xy,
-                            data.data[self._data_channel].ravel()
-                        )
+                        data_1d = optimizer_data.sum(axis=1)
 
-                    position_update = {ax: opt_pos[ii] for ii, ax in enumerate(data.scan_axes)}
+                        opt_pos, fit_data, fit_res = self._get_pos_from_1d_gauss_fit(
+                            x,
+                            data_1d,
+                        )
+                        position_update = {data.scan_axes[0]: opt_pos[0]}
+                        if False:
+                            x = np.linspace(*data.scan_range[0], data.scan_resolution[0])
+                            y = np.linspace(*data.scan_range[1], data.scan_resolution[1])
+                            xy = np.meshgrid(x, y, indexing="ij")
+                            opt_pos, fit_data, fit_res = self._get_pos_from_2d_gauss_fit(
+                                xy, optimizer_data.ravel()
+                            )
+                    #!ADD CHECK THE Rsquared VALUE OF THE FIT
+                    # Abort optimize if fit failed
+                    self._last_fit_results = fit_res
+                    if (
+                        (fit_data is None)
+                        or (fit_res is None)
+                        or (fit_res is not None and fit_res.rsquared < self._min_r_squared)
+                    ):
+                        try:
+                            self._scan_logic().set_target_position(opt_pos)
+                        except Exception:
+                            self.log.exception(
+                                "Failed to restore scanner position after failed fit."
+                            )
+
+                            self.log.warning("Stopping optimization due to failed fit.")
+                            self.stop_optimize()
+                        return
+
                     if fit_data is not None:
                         new_pos = self._scan_logic().set_target_position(position_update)
                         for ax in tuple(position_update):
                             position_update[ax] = new_pos[ax]
 
-                        fit_data = {'fit_data':fit_data, 'full_fit_res':fit_res}
+                        fit_data = {"fit_data": fit_data, "full_fit_res": fit_res}
 
-                    self.log.debug(f"Optimizer issuing position update: {position_update}")
-                    self._optimal_position.update(position_update)
-                    self.sigOptimizeStateChanged.emit(True, position_update, fit_data)
-
-                    # Abort optimize if fit failed
-                    if fit_data is None:
-                        self.log.warning("Stopping optimization due to failed fit.")
-                        self.stop_optimize()
-                        return
+                        self.log.debug(f"Optimizer issuing position update: {position_update}")
+                        self._optimal_position.update(position_update)
+                        self.sigOptimizeStateChanged.emit(True, position_update, fit_data)
 
                 except:
                     self.log.exception()
@@ -410,13 +453,38 @@ class PLEOptimizeScannerLogic(LogicBase):
                 self._sigNextSequenceStep.emit()
             return
 
+    def _get_accumulated_optimizer_data(self, data):
+        channel = self._data_channel
+        if data.accumulated is None or channel not in data.accumulated:
+            return data.data[channel]
+
+        accumulated = data.accumulated[channel]
+        data_new = accumulated[~np.all(accumulated == 0, axis=1)]
+        if data_new.size > 1:
+            last_row = data_new[-1, :]
+            mask = np.ones_like(data_new, dtype=bool)
+            mask[-1, :] = last_row != 0
+            return np.sum(mask * data_new, axis=0) / np.sum(mask, axis=0)
+        return accumulated.mean(axis=0)
+
+    def toggle_ple_tracking(self, enable, tracking_period=None):
+        if tracking_period is not None:
+            self._tracking_period = tracking_period
+        self.sigTrackPle.emit(enable)
+
+    @QtCore.Slot(bool)
+    def enable_ple_tracking(self, enable):
+        if enable:
+            self._ple_tracking_timer.setInterval(self._tracking_period * 1000)  # in secs
+            self._ple_tracking_timer.start()
+        else:
+            self._ple_tracking_timer.stop()
+
     def stop_optimize(self):
         with self._thread_lock:
-            if self.module_state() == 'idle':
+            if self.module_state() == "idle":
                 self.sigOptimizeStateChanged.emit(False, dict(), None)
-                
-
-            if self._scan_logic().module_state() != 'idle':
+            if self._scan_logic().module_state() != "idle":
                 # optimizer scans are never saved in scanning history
                 err = self._scan_logic().stop_scan()
             else:
@@ -426,7 +494,7 @@ class PLEOptimizeScannerLogic(LogicBase):
             self.module_state.unlock()
             self.sigOptimizeStateChanged.emit(False, dict(), None)
             self.sigOptimizeDone.emit()
-       
+
             return err
 
     def _get_pos_from_2d_gauss_fit(self, xy, data):
@@ -438,11 +506,14 @@ class PLEOptimizeScannerLogic(LogicBase):
             y_min, y_max = xy[1].min(), xy[1].max()
             x_middle = (x_max - x_min) / 2 + x_min
             y_middle = (y_max - y_min) / 2 + y_min
-            self.log.exception('2D Gaussian fit unsuccessful.')
+            self.log.exception("2D Gaussian fit unsuccessful.")
             return (x_middle, y_middle), None, None
 
-        return (fit_result.best_values['center_x'],
-                fit_result.best_values['center_y']), fit_result.best_fit.reshape(xy[0].shape), fit_result
+        return (
+            (fit_result.best_values["center_x"], fit_result.best_values["center_y"]),
+            fit_result.best_fit.reshape(xy[0].shape),
+            fit_result,
+        )
 
     def _get_pos_from_1d_gauss_fit(self, x, data):
         model = Gaussian()
@@ -452,10 +523,11 @@ class PLEOptimizeScannerLogic(LogicBase):
         except:
             x_min, x_max = x.min(), x.max()
             middle = (x_max - x_min) / 2 + x_min
-            self.log.exception('1D Gaussian fit unsuccessful.')
+            self.log.exception("1D Gaussian fit unsuccessful.")
             return (middle,), None, None
         self._last_fit_results = fit_result
-        return (fit_result.best_values['center'],), fit_result.best_fit, fit_result
+        return (fit_result.best_values["center"],), fit_result.best_fit, fit_result
+
     def _get_pos_from_1d_lorentian_fit(self, x, data):
         model = Lorentzian()
 
@@ -464,13 +536,13 @@ class PLEOptimizeScannerLogic(LogicBase):
         except:
             x_min, x_max = x.min(), x.max()
             middle = (x_max - x_min) / 2 + x_min
-            self.log.exception('1D Lorentian fit unsuccessful.')
+            self.log.exception("1D Lorentian fit unsuccessful.")
             return (middle,), None, None
         self._last_fit_results = fit_result
-        return (fit_result.best_values['center'],), fit_result.best_fit, fit_result
+        return (fit_result.best_values["center"],), fit_result.best_fit, fit_result
 
 
-class OptimizerScanSequence():
+class OptimizerScanSequence:
     def __init__(self, axes, sequence=None):
         self._avail_axes = axes
         self._sequence = None
@@ -494,7 +566,7 @@ class OptimizerScanSequence():
                     raise ValueError
                 out_str += ", "
 
-            out_str = out_str.rstrip(', ')
+            out_str = out_str.rstrip(", ")
 
         return out_str
 
@@ -516,8 +588,10 @@ class OptimizerScanSequence():
         """
         @param sequence: list of tuples, eg. [('x','y'), ('z')]
         """
-        if not sequence in self._available_opt_seqs_raw():
-            raise ValueError(f"Given {sequence} sequence incompatible with axes= {self._avail_axes}")
+        if sequence not in self._available_opt_seqs_raw():
+            raise ValueError(
+                f"Given {sequence} sequence incompatible with axes= {self._avail_axes}"
+            )
 
         self._sequence = sequence
 
@@ -527,8 +601,9 @@ class OptimizerScanSequence():
         Based on the given plot dimensions and axes configuration, give all possible permutations of scan sequences.
         """
 
-        return [OptimizerScanSequence(self._avail_axes, seq) for seq in self._available_opt_seqs_raw()]
-
+        return [
+            OptimizerScanSequence(self._avail_axes, seq) for seq in self._available_opt_seqs_raw()
+        ]
 
     def _available_opt_seqs_raw(self, remove_1d_in_2d=True):
         """
@@ -638,8 +713,6 @@ class OptimizerScanSequence():
         # if remove_1d_in_2d:
         #     out_seqs = remove_1d_in_2d_axes_dupl(out_seqs)
 
-        out_seqs = [("a")]
+        out_seqs = ["a"]
 
         return out_seqs
-
-

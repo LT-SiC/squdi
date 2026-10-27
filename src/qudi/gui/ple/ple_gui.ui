@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>380</width>
-    <height>1026</height>
+    <width>669</width>
+    <height>1030</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -45,8 +45,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>380</width>
-     <height>26</height>
+     <width>669</width>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">
@@ -83,6 +83,7 @@
    <addaction name="actionSave"/>
    <addaction name="separator"/>
    <addaction name="action_optimize_position"/>
+   <addaction name="actionTrackPLE"/>
    <addaction name="actionFull_range"/>
   </widget>
   <widget class="QDockWidget" name="scan_control_DockWidget">
@@ -95,7 +96,7 @@
    <property name="minimumSize">
     <size>
      <width>380</width>
-     <height>100</height>
+     <height>133</height>
     </size>
    </property>
    <property name="maximumSize">
@@ -183,6 +184,9 @@
            <property name="minimum">
             <double>-99.000000000000000</double>
            </property>
+           <property name="maximum">
+            <double>100000000000000.000000000000000</double>
+           </property>
           </widget>
          </item>
         </layout>
@@ -227,7 +231,7 @@
             <double>1.000000000000000</double>
            </property>
            <property name="maximum">
-            <double>1000.000000000000000</double>
+            <double>1000000000.000000000000000</double>
            </property>
            <property name="value">
             <double>50.000000000000000</double>
@@ -309,7 +313,7 @@
             </size>
            </property>
            <property name="maximum">
-            <number>1000</number>
+            <number>1000000000</number>
            </property>
           </widget>
          </item>
@@ -602,6 +606,39 @@
     </layout>
    </widget>
   </widget>
+  <widget class="QDockWidget" name="ple_retrace_data_dockWidget">
+   <property name="windowTitle">
+    <string>Retrace</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="ple_retrace_widget"/>
+  </widget>
+  <widget class="QDockWidget" name="retrace_matrix_dockWidget">
+   <property name="windowTitle">
+    <string>Retrace matrix</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>1</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_4"/>
+  </widget>
+  <widget class="QDockWidget" name="avg_retrace_dockWidget">
+   <property name="minimumSize">
+    <size>
+     <width>77</width>
+     <height>38</height>
+    </size>
+   </property>
+   <property name="windowTitle">
+    <string>Retrace averaged</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents_5"/>
+  </widget>
   <action name="action_ple_settings">
    <property name="icon">
     <iconset>
@@ -668,16 +705,27 @@
     <string>Fit configuration</string>
    </property>
   </action>
+  <action name="actionTrackPLE">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Track PLE</string>
+   </property>
+  </action>
   <zorder>scan_control_DockWidget</zorder>
   <zorder>ple_data_dockWidget</zorder>
   <zorder>ple_matrix_dockWidget</zorder>
   <zorder>ple_averaged_dockWidget</zorder>
+  <zorder>ple_retrace_data_dockWidget</zorder>
+  <zorder>retrace_matrix_dockWidget</zorder>
+  <zorder>avg_retrace_dockWidget</zorder>
  </widget>
  <customwidgets>
   <customwidget>
    <class>ScienDSpinBox</class>
    <extends>QDoubleSpinBox</extends>
-   <header location="global">qudi.util.widgets.scientific_spinbox</header>
+   <header>qudi.util.widgets.scientific_spinbox.h</header>
   </customwidget>
   <customwidget>
    <class>PlotWidget</class>

@@ -1,19 +1,13 @@
-
-from sys import displayhook
-import numpy as np
 import os
 import pyqtgraph as pg
-from PySide2 import QtCore, QtWidgets, QtGui
-import time
-import datetime
+from PySide6 import QtCore, QtWidgets
 
 from qudi.core.connector import Connector
 from qudi.util.colordefs import QudiPalettePale as palette
 from qudi.core.module import GuiBase
-from qudi.util.widgets.plotting import colorbar
-from qudi.util.colordefs import ColorScaleInferno
 from qudi.util.colordefs import QudiPalette as palette
 from qudi.core.statusvariable import StatusVar
+from qudi.core.configoption import ConfigOption
 from qudi.util.units import ScaledFloat
 from qudi.util.mutex import Mutex
 from qudi.util.widgets.fitting import FitWidget, FitConfigurationDialog
@@ -32,8 +26,6 @@ class TTWindow(QtWidgets.QMainWindow):
         uic.loadUi(ui_file, self)
         self.show()
 
-
-
 class TTGui(GuiBase):
     """
     Main GUI for the Timetagger module implementing Counting, Autocorrelation, and histogram functions.
@@ -46,6 +38,10 @@ class TTGui(GuiBase):
     sigToggleCounter = QtCore.Signal(object)
     sigToggleCorr = QtCore.Signal(object)
     sigToggleHist = QtCore.Signal(object)
+    sigToggleDump = QtCore.Signal(bool, str, str)
+
+    # start the counter when the GUI is activated (same as pressing the counter button)
+    _autostart_counter = ConfigOption(name='autostart_counter', default=True, missing='nothing')
 
     _counter_freq = StatusVar('counter_freq', default=50)
     _counter_length = StatusVar('counter_length', default=10)
@@ -58,6 +54,7 @@ class TTGui(GuiBase):
     _save_folderpath = StatusVar('save_folder_path', default='Default')
    
     save_folderpath = StatusVar('save_folderpath', default='')
+    _save_dump_folderpath = StatusVar('save_dump_folderpath', default='')
 
 
     def __init__(self, *args, **kwargs):
@@ -74,6 +71,7 @@ class TTGui(GuiBase):
 
         @return int: error code (0:OK, -1:error)
         """
+
         self._save_window_geometry(self._mw)
         self.__disconnect_fit_control_signals()
         self._fsd.close()
@@ -226,7 +224,8 @@ class TTGui(GuiBase):
             self._timetaggerlogic.configure_counter, QtCore.Qt.QueuedConnection)
         self._timetaggerlogic.sigCounterDataChanged.connect(
             self.update_counter_data, QtCore.Qt.QueuedConnection)
-
+        self._timetaggerlogic.sigDumpSizeChanged.connect(
+            self.update_dump_size, QtCore.Qt.QueuedConnection)
         self._mw.toggleCorrPushButton.toggled.connect(self.update_corr)
         self._mw.corrBinWidthDoubleSpinBox.setValue(self._corr_bin_width)
         self._mw.corrRecordLengthDoubleSpinBox.setValue(self._corr_record_length)
@@ -247,14 +246,28 @@ class TTGui(GuiBase):
         self._mw.histRecordLengthDoubleSpinBox.setValue(self._hist_record_length)
         self.sigToggleHist.connect(
             self._timetaggerlogic.configure_hist, QtCore.Qt.QueuedConnection)
+        self.sigToggleDump.connect(
+            self._timetaggerlogic.dump_data, QtCore.Qt.QueuedConnection)
         self._timetaggerlogic.sigHistDataChanged.connect(
             self.update_hist_data, QtCore.Qt.QueuedConnection)
         self._mw.saveAllPushButton.clicked.connect(self._save_data_clicked)
+        self._mw.dump_checkBox.toggled.connect(self._dump_toggled)
         self._mw.currPathLabel.setText(self._save_folderpath)
+        self._mw.currDumpPathLabel.setText(self._save_dump_folderpath)
         self._mw.DailyPathPushButton.clicked.connect(self._daily_path_clicked)
         self._mw.newPathPushButton.clicked.connect(self._new_path_clicked)
+        self._mw.dumpNewPathPushButton.clicked.connect(self._new_dump_path_clicked)
 
         self._mw.counter_checkBox.setChecked(True)
+
+        # Start the counter right away. All signals are connected at this point, so this does exactly what a click
+        # on the counter button does. Signals are blocked so that update_counter runs once, also if the button
+        # is already checked in the .ui file.
+        if self._autostart_counter:
+            self._mw.toggleCounterPushButton.blockSignals(True)
+            self._mw.toggleCounterPushButton.setChecked(True)
+            self._mw.toggleCounterPushButton.blockSignals(False)
+            self.update_counter()
     
     def show(self):
         """Make window visible and put it above all other windows.
@@ -295,6 +308,9 @@ class TTGui(GuiBase):
             self.averaged_curves[ch].setData(y=y_arr, x=x_arr)
         counts = data['sum']
         self._mw.count_display_label.setText('{:.2r}c/s'.format(ScaledFloat(counts)))
+        
+    def update_dump_size(self, memory_used):
+        self._mw.memory_label.setText('{:.2r}b'.format(ScaledFloat(memory_used)))
 
     def update_corr(self):
         self._corr_bin_width = self._mw.corrBinWidthDoubleSpinBox.value()
@@ -330,8 +346,40 @@ class TTGui(GuiBase):
         self._save_folderpath = 'Default'
         self._mw.currPathLabel.setText(self._save_folderpath)
 
+    def _new_dump_path_clicked(self):
+        new_path = QtWidgets.QFileDialog.getExistingDirectory(self._mw, 'Select Folder')
+        if new_path:
+            self._save_dump_folderpath = new_path
+            self._mw.currDumpPathLabel.setText(self._save_dump_folderpath)
+
+    def _dump_toggled(self):
+        if not self._mw.dump_checkBox.isChecked():
+            self.sigToggleDump.emit(False, '', '')
+        else:
+            if self._mw.dumpNewPathPushButton.isChecked() and self._mw.dumpNewPathPushButton.isEnabled():
+                #new_path = QtWidgets.QFileDialog.getExistingDirectory(self._mw, 'Select Folder')
+                #if new_path:
+                #self._save_folderpath = new_path
+                self._mw.currDumpPathLabel.setText(self._save_dump_folderpath)
+                self._mw.dumpNewPathPushButton.setChecked(False)
+                save = True
+                self.sigToggleDump.emit(True, self._mw.saveDumpTagLineEdit.text(),
+                                        self._save_dump_folderpath)
+     
+            elif self._save_dump_folderpath.strip():
+                self._mw.currDumpPathLabel.setText(self._save_dump_folderpath)
+                self._mw.dumpNewPathPushButton.setChecked(False)
+                save = True
+                self.sigToggleDump.emit(True, self._mw.saveDumpTagLineEdit.text(),
+                                        self._save_dump_folderpath)
+            else:
+                self.log.warning("Set the dump path.")
+
     def _save_data_clicked(self):
-        save_types = {'counter': self._mw.counter_checkBox.isChecked(), 'corr': self._mw.corr_checkBox.isChecked(), 'hist': self._mw.hist_checkBox.isChecked()}
+        save_type = None
+        save_types = {'counter': self._mw.counter_checkBox.isChecked(), 
+                      'corr': self._mw.corr_checkBox.isChecked(), 
+                      'hist': self._mw.hist_checkBox.isChecked()}
         for st in save_types:
             if save_types[st]:
                 save_type = st
@@ -348,7 +396,11 @@ class TTGui(GuiBase):
             self._mw.currPathLabel.setText(self._save_folderpath)
             save = True
         # if save:
-        self._timetaggerlogic._save_recorded_data(to_file=True, name_tag=self._mw.saveTagLineEdit.text(), save_figure=True, save_type=save_type, save_path = self._save_folderpath)
+        self._timetaggerlogic._save_recorded_data(to_file=True, 
+                                                  name_tag=self._mw.saveTagLineEdit.text(), 
+                                                  save_figure=True, 
+                                                  save_type=save_type, 
+                                                  save_path = self._save_folderpath)
 
     def update_fit(self, fit_method, fit_results):
         """ Update the drawn fit curve.

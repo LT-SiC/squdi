@@ -1,14 +1,9 @@
 
-from PySide2 import QtCore, QtGui, QtWidgets
-import pyqtgraph as pg
+from PySide6 import QtCore, QtWidgets
 import qudi.util.uic as uic
 import os
-from qudi.util.widgets.advanced_dockwidget import AdvancedDockWidget
-from qudi.util.widgets.fitting import FitWidget
 import importlib
-from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
-from typing import Tuple, Union, Sequence
-from typing import Optional, List
+from typing import Optional
 try:
     importlib.reload(wavelength_widget)
 except NameError:

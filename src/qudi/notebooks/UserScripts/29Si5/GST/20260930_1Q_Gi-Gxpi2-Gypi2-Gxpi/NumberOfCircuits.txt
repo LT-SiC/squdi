@@ -1,0 +1,9 @@
+L <= 1    : 43 circuits
+L <= 2    : 90 circuits
+L <= 4    : 223 circuits
+L <= 8    : 396 circuits
+L <= 16   : 573 circuits
+L <= 32   : 750 circuits
+L <= 64   : 927 circuits
+L <= 128  : 1104 circuits
+L <= 256  : 1281 circuits
