@@ -1,4 +1,0 @@
-numpy
-scipy
-socketscpi
-matplotlib

@@ -29,7 +29,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-from PySide2 import QtCore
+from PySide6 import QtCore
 from qudi.core.configoption import ConfigOption
 from qudi.core.connector import Connector
 from qudi.util.constraints import ScalarConstraint

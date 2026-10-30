@@ -335,13 +335,8 @@ class NuclearOPs(DataGeneration):
         print('NuclearOps run_measurement')
         
         self.init_run(**kwargs)
-        
-        confocal_pos = self.queue._optimizer._optimal_position
-        if len(confocal_pos.keys())>0: # after restart of qudi the dict is empy until first refocus
-            x = confocal_pos['x']
-            y = confocal_pos['y']
-            z = confocal_pos['z']
-            self.df_refocus_pos = pd.DataFrame(OrderedDict(confocal_x=[x],confocal_y = [y], confocal_z = [z]))
+
+        self.log_position()
         try:
             #if hasattr(self.queue,'microwave'):
             #   self.queue.microwave.On()
@@ -890,13 +885,7 @@ class NuclearOPs(DataGeneration):
             # starts the optimizer in its own thread and waits for its end (signal based, no polling)
             self.queue.run_optimizer()
 
-            confocal_pos = self.queue._optimizer._optimal_position
-            if len(confocal_pos.keys())>0: # after restart of qudi the dict is empy until first refocus
-                x = confocal_pos['x']
-                y = confocal_pos['y']
-                z = confocal_pos['z']
-                self.df_refocus_pos = pd.DataFrame(OrderedDict(confocal_x=[x], confocal_y=[y], confocal_z=[z]))
-            
+            self.log_position()
             self.queue._awg.mcas_dict.stop_awgs()
             self.performedRefocus = True
 
@@ -964,13 +953,7 @@ class NuclearOPs(DataGeneration):
             _sleep_ms(1000) #TODO find a better synchro tool.
             
             self.last_confocal_refocus = time.time()
-            confocal_pos = self.queue._optimizer._optimal_position
-            if len(confocal_pos.keys())>0: # after restart of qudi the dict is empy until first refocus
-                x = confocal_pos['x']
-                y = confocal_pos['y']
-                z = confocal_pos['z']
-                self.df_refocus_pos = pd.DataFrame(OrderedDict(confocal_x=[x], confocal_y=[y], confocal_z=[z]))
-
+            self.log_position()
             self.performedRefocus = True
             self.queue._awg.mcas_dict.stop_awgs()
 
@@ -1213,13 +1196,16 @@ class NuclearOPs(DataGeneration):
             self.mcas.initialize()
             #print("init fininished")
         print("getting trace")
-        self.queue._gated_counter.count(abort,
+        self.queue._gated_counter.count(
+                                 abort,
+                                 #mcas = self.mcas,
                                  ch_dict=self.mcas.ch_dict,
                                  start_trigger_delay_ps_list = delay_ps_list,
                                  window_ps_list = window_ps_list,
                                  two_zpl_apd = self.two_zpl_apd,
                                  raw_clicks_processing = self.raw_clicks_processing,
-                                 raw_clicks_processing_channels = self.raw_clicks_processing_channels)
+                                 raw_clicks_processing_channels = self.raw_clicks_processing_channels
+                                 )
         print("measurement finished")
     # def setup_rf(self, current_iterator_df):
     #     t1 = time.time()
@@ -1403,3 +1389,19 @@ class NuclearOPs(DataGeneration):
                     del seq
         except:
             pass
+
+    def log_position(self):
+        #When the confocal connected #TODO 1
+        if self.queue._optimizer is not None:
+            try:
+                confocal = self.queue._optimizer
+                x = confocal._optimal_position['x']
+                y = confocal._optimal_position['y']
+                z = confocal._optimal_position['z']
+            except:
+                x,y,z = 0,0,0
+            self.df_refocus_pos = pd.DataFrame(OrderedDict(confocal_x=[x],confocal_y = [y], confocal_z = [z]))
+        else:
+            x,y,z = 0,0,0
+            self.df_refocus_pos = pd.DataFrame(OrderedDict(confocal_x=[x],confocal_y = [y], confocal_z = [z]))
+

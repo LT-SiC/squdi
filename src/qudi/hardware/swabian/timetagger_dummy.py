@@ -345,7 +345,6 @@ _DEFAULT_CONSTRAINTS = {
     'counter': {'channels': [1, 2, 3, 4]},
 }
 
-
 class TT(TimeTaggerInterface):
     # same options as the real TT module, so the config block can be swapped without editing
     _hist = ConfigOption('hist', {'click_channel': 1, 'start_channel': 5, 'binwidth': 1000, 'number_of_bins': 1000})

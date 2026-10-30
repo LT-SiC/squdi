@@ -30,8 +30,9 @@ class GatedCounter(GenericLogic):
     # fastcounter = Connector(interface='TimeTaggerInterface')
     # add possible signals here
     # Needed a connection to the queue as well... connection to mcas?
-    fastcounter = Connector(interface="TT", name="fastcounter")
-    mcas_holder = Connector(interface="McasDictHolderInterface")
+    #fastcounter = Connector(interface="TT", name="fastcounter")
+    fastcounter = Connector(interface="TT")
+    mcas_dict_holder = Connector(interface = "McasDictHolderInterface")
     sigHistogramUpdated = QtCore.Signal()
     sigMeasurementFinished = QtCore.Signal()
     clear_plot_signal = PySide6.QtCore.Signal(int)

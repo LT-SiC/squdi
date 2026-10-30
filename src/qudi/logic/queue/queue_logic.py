@@ -339,7 +339,7 @@ class QueueLogic(LogicBase):
         self._biaslogic                 = self._optional_module('biaslogic')
         self._powerstabilization_logic  = self._optional_module('powerstabilization_logic')
         self._poimanagerlogic           = self._optional_module('poimanagerlogic')
-        self._counter                   = self._optional_module('counterlogic1')
+        self._counter                   = self._optional_module('counterlogic1') # --> needs connector to TT instead of nidaq
         
         self.tt = self._transition_tracker # FIXME give the already correct name in lines 253. Maybe both names are used in other files
         #self.create_odmr()  #only logic (no gui)

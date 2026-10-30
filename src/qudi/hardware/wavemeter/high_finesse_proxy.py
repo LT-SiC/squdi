@@ -27,8 +27,8 @@ import os
 import subprocess
 from typing import Optional, List, Set, TYPE_CHECKING, Dict
 import ctypes
-from ctypes import byref, cast, c_double, c_int, c_long, POINTER, WINFUNCTYPE, WinDLL, c_char
-from PySide2.QtCore import QObject
+from ctypes import byref, cast, c_double, c_int, c_long, POINTER, WINFUNCTYPE, WinDLL
+from PySide6.QtCore import QObject
 from qudi.core.threadmanager import ThreadManager
 from qudi.core.logger import get_logger
 from qudi.core.module import Base

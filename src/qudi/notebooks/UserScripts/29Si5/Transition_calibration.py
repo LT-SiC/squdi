@@ -138,7 +138,7 @@ def settings(pdc={}):
 
     #confocal refocus
     nuclear.do_confocal_repump_refocus = False
-    nuclear.do_confocal_A1A2_refocus = True
+    nuclear.do_confocal_A1A2_refocus = False
     nuclear.do_confocal_A2MW_refocus = False
     nuclear.check_A2_power = False
     nuclear.do_repump = False

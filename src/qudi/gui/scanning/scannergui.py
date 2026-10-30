@@ -848,6 +848,10 @@ class ScannerGui(GuiBase):
         if scan_data is not None:
             if caller_id is self._optimizer_id:
                 channel = self._osd.settings['data_channel']
+                print("channel")
+                print(channel)
+                print("data")
+                print(scan_data.data[channel])
                 if scan_data.scan_dimension == 2:
                     x_ax, y_ax = scan_data.scan_axes
                     self.optimizer_dockwidget.set_image(image=scan_data.data[channel],

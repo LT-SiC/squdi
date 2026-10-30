@@ -1,6 +1,6 @@
 from os.path import join, getsize, isfile
 import numpy as np
-from TimeTagger import (
+from Swabian.TimeTagger import (
     createTimeTagger,
     createTimeTaggerNetwork,
     AccessMode,
@@ -82,7 +82,7 @@ class TT(Base):
                     self.tagger = createTimeTagger(self._serial)
                 else:
                     self.tagger = createTimeTagger()
-                self.tagger.startServer(access_mode=AccessMode.Control, port=self._port)
+                #self.tagger.startServer(access_mode=AccessMode.Control, port=self._port)
                 self.log.info(f"Tagger initialization successful: {self.tagger.getSerial()}")
 
         except Exception as e:
@@ -98,6 +98,8 @@ class TT(Base):
                 self.delay_channel(delay=params["delay"], channel=channel)
             if "trigger_level" in params.keys():
                 self.tagger.setTriggerLevel(channel, params["trigger_level"])
+            if "dead_time" in params.keys():
+                self.tagger.setDeadtime(channel, params["dead_time"])
 
         # if self.set_conditional_filter:
         #     self.tagger.setConditionalFilter(trigger=self._hist["channels"],
@@ -169,35 +171,49 @@ class TT(Base):
     def combiner(self, channels):
         return Combiner(self.tagger, channels)
 
-    # @remote_tagger
-    def count_between_markers(self, click_channel, begin_channel, end_channel, n_values):
-        return CountBetweenMarkers(self.tagger, click_channel, begin_channel, end_channel, n_values)
+    def count_between_markers(self, n_values=1, **kwargs):
 
-    # @remote_tagger
-    def count_between_markers(self, click_channel, begin_channel, end_channel, n_values):
-
-        kwargs = {"click_channel": click_channel, "begin_channel": begin_channel, "n_values": n_values}
-
-        if end_channel is not None:
-            kwargs["end_channel"] = end_channel
-        return CountBetweenMarkers(self.tagger, **kwargs)
-
-    def count_between_markers_nops(self, n_values=1):
-        ## Adapted to work best with nuclear ops, might be rewritten with return statement, but takes time to see
-        ## how it affects usage of the class.
-        print("Setting the gated counter with n values", n_values)
-        print("channels: start stop -- ", self._count_between_markers["begin_channel"], self._count_between_markers["end_channel"])
-        print("click channel -- ", self._count_between_markers["click_channel"])
         # TODO parse the channels from kwargs, otherwise if not present keep default.
         # something liek this.  cl_ch = getattr(kwargs['cl_ch'], self._click_channel)
-        print("TAGGER: APD", self._count_between_markers["click_channel"])
-        self.gated_counter_countbetweenmarkers = CountBetweenMarkers(
-            self.tagger,
-            click_channel=self._count_between_markers["click_channel"],
-            begin_channel=self._count_between_markers["begin_channel"],
-            end_channel=self._count_between_markers["end_channel"],
-            n_values=n_values,
-        )
+        click_channel = kwargs.get("click_channel", self._count_between_markers["click_channel"])
+        begin_channel = kwargs.get("begin_channel", self._count_between_markers["begin_channel"])
+        end_channel = kwargs.get("end_channel", self._count_between_markers["end_channel"])
+        n_values = kwargs.get("n_values", n_values)
+        counter_kwargs = dict(click_channel=click_channel, begin_channel=begin_channel, n_values=n_values)
+        if end_channel is not None:
+            counter_kwargs["end_channel"] = end_channel
+        self.gated_counter_countbetweenmarkers = CountBetweenMarkers(self.tagger, **counter_kwargs)
+        return self.gated_counter_countbetweenmarkers
+
+    # # @remote_tagger
+    # def count_between_markers(self, click_channel, begin_channel, end_channel, n_values):
+    #     return CountBetweenMarkers(self.tagger, click_channel, begin_channel, end_channel, n_values)
+
+    # # @remote_tagger
+    # def count_between_markers(self, click_channel, begin_channel, end_channel, n_values):
+
+    #     kwargs = {"click_channel": click_channel, "begin_channel": begin_channel, "n_values": n_values}
+
+    #     if end_channel is not None:
+    #         kwargs["end_channel"] = end_channel
+    #     return CountBetweenMarkers(self.tagger, **kwargs)
+
+    # def count_between_markers_nops(self, n_values=1):
+    #     ## Adapted to work best with nuclear ops, might be rewritten with return statement, but takes time to see
+    #     ## how it affects usage of the class.
+    #     print("Setting the gated counter with n values", n_values)
+    #     print("channels: start stop -- ", self._count_between_markers["begin_channel"], self._count_between_markers["end_channel"])
+    #     print("click channel -- ", self._count_between_markers["click_channel"])
+    #     # TODO parse the channels from kwargs, otherwise if not present keep default.
+    #     # something liek this.  cl_ch = getattr(kwargs['cl_ch'], self._click_channel)
+    #     print("TAGGER: APD", self._count_between_markers["click_channel"])
+    #     self.gated_counter_countbetweenmarkers = CountBetweenMarkers(
+    #         self.tagger,
+    #         click_channel=self._count_between_markers["click_channel"],
+    #         begin_channel=self._count_between_markers["begin_channel"],
+    #         end_channel=self._count_between_markers["end_channel"],
+    #         n_values=n_values,
+    #     )
 
     # @remote_tagger
     def time_differences(self, click_channel, start_channel, next_channel, binwidth, n_bins, n_histograms):

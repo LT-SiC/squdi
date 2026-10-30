@@ -24,6 +24,7 @@ import datetime
 import numpy as np
 import copy as cp
 from abc import abstractmethod
+from PySide6 import QtCore
 from qudi.core.module import Base
 
 
@@ -32,10 +33,20 @@ class ScanningProbeInterface(Base):
 
     A scanner device is hardware that can move multiple axes.
     """
+    # emitted by the scanning logic (change_temperature_regime), hardware may react to it
+    sigChangeTemperatureRegime = QtCore.Signal(bool)
+
+    # number of points of the backward line of a scan, set by the scanning logic before a scan is configured
+    _backwards_line_resolution = 50
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._coordinate_transform = None
         self._coordinate_transform_matrix = None
+
+    def get_max_move_velocity(self):
+        """ Maximum velocity of a move (axis unit per second), None if the hardware does not limit it. """
+        return None
 
     def coordinate_transform(self, val, inverse=False):
         if self._coordinate_transform is None:
@@ -126,17 +137,19 @@ class ScanningProbeInterface(Base):
 
     @abstractmethod
     def start_scan(self):
-        """
+        """ Start the configured scan. The module state must be 'locked' while the scan runs and 'idle' when it is
+        done: the scanning logic polls module_state() to find out that a scan has finished.
 
-        @return (bool): Failure indicator (fail=True)
+        @return int: 0 on success, a negative number on failure. (The scanning logic checks "start_scan() < 0",
+                     a returned bool failure indicator would be read as success.)
         """
         pass
 
     @abstractmethod
     def stop_scan(self):
-        """
+        """ Stop a running scan and set the module state back to 'idle'.
 
-        @return bool: Failure indicator (fail=True)
+        @return int: 0 on success
         """
         pass
 
@@ -666,6 +679,7 @@ class ScanConstraints:
             raise TypeError('Parameter "square_px_only" must be of type bool.')
         self._axes = {ax.name: ax for ax in axes}
         self._channels = {ch.name: ch for ch in channels}
+        self._allow_coordinate_transform = False       # CoordinateTransformMixin sets it to True
         self._backscan_configurable = bool(backscan_configurable)
         self._has_position_feedback = bool(has_position_feedback)
         self._square_px_only = bool(square_px_only)
