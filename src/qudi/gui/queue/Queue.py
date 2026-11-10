@@ -1,61 +1,24 @@
 #!/usr/bin/env python3
-"""
-QueueLogic GUI (Hybrid Version) — cleaned and fixed
-- QueueManager uses a QObject "signals" proxy so it does not need to inherit QObject
-  (avoids metaclass/MRO conflicts)
-- ScriptThread runs embedded classes safely and reports via signals
-- MainWindow is a wrapper around a real QMainWindow (no direct inheritance)
-- Safe table rebuild (reorder) and stable signal/slot wiring
-"""
-from __future__ import print_function
 
-# The legacy star import is done first on purpose: it must not be able to overwrite the explicit Qt / qudi names
-# imported below (PyQt6: a re-exported PyQt5 QtCore/QtWidgets would silently mix two Qt bindings).
-#from logic.qudip_enhanced import *   # legacy QUDI API requires star import
+# from __future__ import print_function
 
-# ---- Standard library imports ----
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from datetime import datetime          # keep class import
+from datetime import datetime
 from typing import Optional
 
-# ---- Third-party imports ----
-
-#from qtpy import QtCore, QtWidgets, QtGui
 from PySide6 import QtCore, QtWidgets, QtGui
 
 from PySide6.QtWidgets import (
     QMessageBox,
 )
-# from qtpy.QtWidgets import (
-#     QMessageBox,
-# )
 
-# try:
-#     import psutil
-# except Exception:
-#     psutil = None
-
-#import sip
-
-# ---- QUDI imports ----
-#import logic.misc
-#import logic.misc as misc
-#from logic.generic_logic import GenericLogic
 from qudi.core.connector import Connector
-#from core.util.mutex import Mutex
-
-# import logic.ODMR_nops as odmr
-# importlib.reload(odmr)
 
 from qudi.core.module import GuiBase
 from qudi.core.statusvariable import StatusVar
 
-
-QUEUE_DIR = Path.cwd() / "queue"
-QUEUE_DIR.mkdir(exist_ok=True)
-#CURRENT_RUNNING_NAME = "queuelogic.cun"
 import os
 QUDI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -97,19 +60,9 @@ class QueueGui(GuiBase):
     available as attributes on this wrapper.
     """
     # Connect to the Queue.
-    queue_logic = Connector(interface="QueueLogic")  # class name
-    scripts_folder=StatusVar('scripts_folder', "C:/Users/ehess/OneDrive/Dokumente/Software/squdi/src/qudi/notebooks/UserScripts")#r"C:\src\qudi\notebooks\UserScripts"
-    #scripts_folder=StatusVar('scripts_folder', QUDI_DIR+"/notebooks/UserScripts")#r"C:\src\qudi\notebooks\UserScripts"
-    # def __init__(self):
-    #     # real internal QMainWindow
-    #     self._win = QtWidgets.QMainWindow()
-    #     #self._init_ui()
-    #     #self._queue_logic = QueueManager()
-
-    #     # set a fixed window title / size like before
-    #     self._win.setWindowTitle("QueueLogic")
-    #     self._win.resize(1100, 650)
-
+    queue_logic = Connector(interface="QueueLogic")
+    scripts_folder=StatusVar('scripts_folder', QUDI_DIR + "/notebooks/UserScripts")
+    
     def on_activate(self):
         self._win = QtWidgets.QMainWindow()
         self._win.setWindowTitle("QueueLogic")
@@ -213,7 +166,7 @@ class QueueGui(GuiBase):
 
     # ---- UI callbacks ----
     def select_folder(self):
-        d = QtWidgets.QFileDialog.getExistingDirectory(self._win, "Select Folder", "C:/Users/ehess/OneDrive/Dokumente/Software/squdi/src/qudi/notebooks/UserScripts")#str(Path.cwd())
+        d = QtWidgets.QFileDialog.getExistingDirectory(self._win, "Select Folder", QUDI_DIR + "/notebooks/UserScripts")#str(Path.cwd())
         if d:
             self.folder_line.setText(d)
             self.refresh_py_list()
