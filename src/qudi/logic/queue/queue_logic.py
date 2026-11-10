@@ -2,33 +2,30 @@
 from __future__ import print_function, absolute_import, division
 __metaclass__ = type
 
-# ----------------------------
-# Original imports (kept)
-# ----------------------------
 import sys, os
 import imp
 
 import zipfile
 
-from PySide6.QtCore import Signal, QObject, Qt
-
+from PySide6.QtCore import Signal, Slot, QObject, Qt, QThread, QCoreApplication
+from qudi.logic.qudip_enhanced import *
 import qudi.logic.misc as misc
 import datetime
-import os
 import pickle
-import sys
 import threading
 import time
 import traceback
 from qudi.core.module import LogicBase
 from qudi.core.connector import Connector
+from qudi.core.configoption import ConfigOption
 import multiprocess
 from queue import Queue   
 import shutil
 
 import collections
 import collections.abc
-# import qudi.logic.odmr_nops_logic as odmr; importlib.reload(odmr) # FIXME connect via connector (really?)
+import copy
+import numpy as np
 from qudi.util.mutex import Mutex
 
 # ----------------------------
@@ -139,6 +136,7 @@ class OptimizerRunner(QObject):
         self._finished.wait(10.0)
 
     def run(self, abort=None, timeout=300.0, start_timeout=10.0):
+        print("Optimizer runner RUN")
         """
         Run one complete optimization and wait for it.
 
@@ -173,6 +171,530 @@ class OptimizerRunner(QObject):
                 self._stop()
                 return False
         return True
+
+class _MainThreadCaller(QObject):
+    """
+    Runs a function in the thread of the Qt application (the GUI thread) and waits for its result.
+    Qt widgets, like the plot window of a NuclearOPs measurement, may only be created there.
+    """
+    _sigRun = Signal(object)
+
+    def __init__(self):
+        super().__init__()
+        app = QCoreApplication.instance()
+        if app is not None:
+            self.moveToThread(app.thread())
+        self._sigRun.connect(self._execute, Qt.ConnectionType.QueuedConnection)
+
+    @Slot(object)
+    def _execute(self, job):
+        try:
+            job['result'] = job['function']()
+        except BaseException as err:
+            job['error'] = err
+        finally:
+            job['done'].set()
+
+    def call(self, function, timeout=60.0):
+        if QThread.currentThread() == self.thread():
+            return function()
+        job = {'function': function, 'done': threading.Event(), 'result': None, 'error': None}
+        self._sigRun.emit(job)
+        if not job['done'].wait(timeout):
+            raise TimeoutError('The GUI thread did not respond within {} s.'.format(timeout))
+        if job['error'] is not None:
+            raise job['error']
+        return job['result']
+
+# class ODMRRefocuser:
+#     """
+#     Periodic ODMR refocus of the mw frequencies in the transition tracker (a NuclearOPs ODMR like the
+#     user script ODMR_Refocus, started automatically instead of by hand).
+
+#     When: once every <interval> seconds after the last refocus, independent of the user scripts. NuclearOPs does not
+#     have to call anything. The refocus is not started at the beginning of a script, but at the time it is due:
+
+#     * No script is running (queue idle, or between two scripts): the refocus runs right away. A refocus that
+#       became due while a script was running is done before the next script of the queue starts.
+#     * A script is running and its NuclearOPs has ``allow_periodic_ODMR_refocus = True`` (the default): the
+#       measurement is paused at its next safe point (start of an iteration, see NuclearOPs.check_manual_pause), the
+#       ODMR runs, then the measurement continues. The settings of the shared gated counter are restored.
+#     * A script is running and sets ``nuclear.allow_periodic_ODMR_refocus = False``: the refocus is delayed until
+#       that script has finished.
+
+#     The ODMR: the transitions are measured like in ODMR_Refocus (pulsed, mw_freq sweep, Lorentzian fit). If a
+#     transition shows no line (no fit, too little contrast, line at the edge of the sweep), the range is widened
+#     and only the missing transitions are measured again: ranges = [(span, step), ...] in MHz. Frequencies that
+#     were found are written to the transition tracker right away.
+
+#     The measurement is plotted live in the same plot window as every NuclearOPs script (PlotData(gui=True), counts
+#     versus mw frequency, with the fit at the end of every stage). The window has to be created in the GUI thread, which
+#     _MainThreadCaller takes care of. The windows of the last refocus stay open; the ones of the refocus before are
+#     closed when a new refocus starts. With plot=False no window is made.
+#     """
+#     DATA_FOLDER = r"D:/Data/NuclearOps"          # as in sequence_creation_helpers.create_nuclear
+#     DEFAULT_RANGES = [(40.0, 0.25), (150.0, 1.0), (400.0, 2.0)]    # (span, step) in MHz
+#     DEFAULT_PARAMETERS = collections.OrderedDict([
+#         ('trans', ['L', 'R']),
+#         ('sweeps', 1),
+#         ('t_read', 2.048),
+#         ('readout', 'A2'),
+#         ('init_time', 50),
+#         ('init_amp', 0.15),
+#         ('factor', 1),
+#         ('omega', 0.3),
+#         ('A2_power', 4),
+#         ('n_simultaneous', 40),
+#         ('confocal_refocus', None),       # None: refocus the confocal position during the ODMR if an optimizer is connected
+#     ])
+#     # settings of the gated counter trace that every NuclearOPs overwrites and that the paused script needs back
+#     TRACE_SETTINGS = ('analyze_type', 'number_of_simultaneous_measurements', 'analyze_sequence', 'binning_factor',
+#                       'average_results', 'consecutive_valid_result_numbers')
+
+#     def __init__(self, queue, interval=3600.0, ranges=None, parameters=None, min_contrast=2.0, min_snr=3.0,
+#                  pause_timeout=900.0, retry_interval=900.0, run_on_activation=False, poll_interval=1.0, plot=True):
+#         """
+#         :param queue: the QueueLogic
+#         :param interval: seconds between two refocus runs, measured from the end of the last one. 0 switches it off.
+#         :param ranges: [(span, step), ...] in MHz, tried one after the other until all transitions are found
+#         :param parameters: overrides of DEFAULT_PARAMETERS
+#         :param min_contrast: minimum contrast of a line in percent
+#         :param min_snr: minimum height of the line in units of the standard deviation of the fit residual
+#         :param pause_timeout: seconds to wait until a running measurement has reached its safe point
+#         :param retry_interval: seconds until the next try after a refocus that did not find all transitions
+#         :param run_on_activation: refocus as soon as possible after the start, not only after one interval
+#         :param plot: show the measurement live in the NuclearOPs plot window
+#         """
+#         self._q = queue
+#         self._interval = float(interval)
+#         self._ranges = [(float(span), float(step)) for span, step in (ranges or self.DEFAULT_RANGES)]
+#         self._parameters = collections.OrderedDict(self.DEFAULT_PARAMETERS)
+#         self._parameters.update(parameters or {})
+#         self._min_contrast = float(min_contrast)
+#         self._min_snr = float(min_snr)
+#         self._pause_timeout = float(pause_timeout)
+#         self._retry_interval = float(retry_interval)
+#         self._poll = float(poll_interval)
+#         self._plot = bool(plot)
+#         self._main_thread = _MainThreadCaller() if self._plot else None
+#         self._windows_current = []                # NuclearOPs of this refocus (plot windows)
+#         self._windows_previous = []               # of the refocus before
+
+#         self.enabled = True                       # periodic refocus can be switched off at run time
+#         self.last_result = None                   # summary of the last refocus
+#         self._next_due = self.get_last_refocus_time() + (0.0 if run_on_activation else self._interval)
+#         # self._next_due = time.time() + (0.0 if run_on_activation else self._interval)
+#         self._shutdown = threading.Event()
+#         self._odmr_lock = threading.Lock()        # only one ODMR at a time
+#         self._abort = None
+#         self._delay_logged = False
+#         self._thread = None
+#         if self._interval > 0:
+#             self._thread = threading.Thread(target=self._loop, name='odmr_refocuser', daemon=True)
+#             self._thread.start()
+
+#     # ------------------------------------------------------------------------------------------------------
+#     # public
+#     # ------------------------------------------------------------------------------------------------------
+#     @property
+#     def next_due(self):
+#         """Time (time.time()) at which the next refocus is due."""
+#         return self._next_due
+
+#     def is_due(self):
+#         return self.enabled and self._interval > 0 and not self._shutdown.is_set() and time.time() >= self._next_due
+
+#     def get_last_refocus_time(self):
+#         # Find folders matching the expected naming structure
+#         f = r"C:/Users/Erik Hesselmeier/Desktop/NuclearOpsData/29Si5/ODMR_Refocus_auto" # TODO get the TransitionTrackerLog here
+#         #TODO save fit result to tt log
+
+#         folders = [
+#             p for p in Path(f).iterdir()
+#             #p for p in Path(self._q.user_script_folder).iterdir() #TODO why does this not work?
+#             if p.is_dir()
+#         ]
+
+#         # Extract timestamps and select the newest folder
+#         def folder_timestamp(folder):
+#             timestamp_str = folder.name[:17]  # e.g. 20261028-h10m34s28
+#             dt = datetime.datetime.strptime(timestamp_str, "%Y%m%d-h%Hm%Ms%S")
+#             return dt.timestamp()
+
+#         newest_folder = max(folders, key=folder_timestamp)
+#         newest_time = folder_timestamp(newest_folder)
+#         return newest_time
+
+#     def refocus_now(self):
+#         """Make the refocus due now. It still waits for the hardware like the periodic one (permission, pause)."""
+#         self._next_due = 0.0
+#         if self._thread is None and not self._shutdown.is_set():
+#             self._interval = max(self._interval, 1.0)
+#             self._thread = threading.Thread(target=self._loop, name='odmr_refocuser', daemon=True)
+#             self._thread.start()
+
+#     def run_if_due(self):
+#         """Called by the queue thread between two scripts: do a due refocus before the next script starts."""
+#         if not self.is_due():
+#             return
+#         if self._q._hw_lock.acquire(False):
+#             try:
+#                 self._run_refocus(None)
+#             except Exception:
+#                 traceback.print_exc()
+#                 self._next_due = time.time() + self._retry_interval
+#             finally:
+#                 self._q._hw_lock.release()
+
+#     def close(self):
+#         self._shutdown.set()
+#         if self._abort is not None:
+#             self._abort.set()
+#         if self._thread is not None and self._thread is not threading.current_thread():
+#             self._thread.join(timeout=2.0)
+
+#     # ------------------------------------------------------------------------------------------------------
+#     # scheduling
+#     # ------------------------------------------------------------------------------------------------------
+#     def _loop(self):
+#         while not self._shutdown.wait(self._poll):
+#             try:
+#                 if self.is_due():
+#                     self._try_refocus()
+#             except Exception:
+#                 traceback.print_exc()
+#                 self._next_due = time.time() + self._retry_interval
+
+#     def _try_refocus(self):
+#         q = self._q
+#         if q._hw_lock.acquire(False):             # no script has the hardware: the queue is idle
+#             try:
+#                 self._run_refocus(None)
+#             finally:
+#                 q._hw_lock.release()
+#             return
+#         module_name = q._current_module_name()
+#         nuclear = q._script_nuclear(module_name) if module_name else None
+#         if nuclear is None:
+#             return                                # helper script, or the next script is just starting
+#         if not getattr(nuclear, 'allow_periodic_ODMR_refocus', True):
+#             if not self._delay_logged:
+#                 q.log.info('ODMR refocus is due, but {} does not allow it during its measurement. '
+#                            'Delayed until the script has finished.'.format(module_name[10:]))
+#                 self._delay_logged = True
+#             return
+#         if getattr(nuclear, 'manual_pause', False) or not q._measurement_running(nuclear):
+#             return                                # paused by hand, or just finishing
+#         if not self._pause(nuclear):
+#             return
+#         try:
+#             self._run_refocus(nuclear)
+#         finally:
+#             nuclear.external_pause = False
+
+#     def _pause(self, nuclear):
+#         """Ask the running measurement to pause at its next safe point and wait until it did."""
+#         nuclear.external_pause = True
+#         t0 = time.time()
+#         while time.time() - t0 < self._pause_timeout and not self._shutdown.is_set():
+#             if getattr(nuclear, 'is_paused', False):
+#                 return True
+#             if not self._q._measurement_running(nuclear):
+#                 break                             # it finished: the refocus follows between the scripts
+#             time.sleep(0.2)
+#         nuclear.external_pause = False
+#         if self._q._measurement_running(nuclear):
+#             self._q.log.warning('The measurement did not pause within {} s, ODMR refocus postponed.'.format(
+#                 self._pause_timeout))
+#             self._next_due = time.time() + 60.0
+#         return False
+
+#     # ------------------------------------------------------------------------------------------------------
+#     # the refocus
+#     # ------------------------------------------------------------------------------------------------------
+#     def _run_refocus(self, main_nuclear):
+#         if not self._odmr_lock.acquire(False):
+#             return
+#         abort = multiprocess.Event()
+#         self._abort = abort
+#         self._close_windows(self._windows_previous)       # plots of the refocus before
+#         self._windows_previous = []
+#         self._windows_current = []
+#         state = self._snapshot()
+#         t0 = time.time()
+#         success = False
+#         try:
+#             print('Starting ODMR refocus.')
+#             self._q.log.info('Starting ODMR refocus.')
+#             self._stop_awgs()
+#             success = self._staged_odmr(abort, main_nuclear)
+#         except Exception:
+#             traceback.print_exc()
+#         finally:
+#             self._restore(state)
+#             self._stop_awgs()
+#             self._abort = None
+#             self._windows_previous = self._windows_current   # these plots stay open until the next refocus
+#             self._windows_current = []
+#             self._delay_logged = False
+#             self.last_result = {'success': success, 'finished': time.time(), 'duration': time.time() - t0}
+#             self._next_due = time.time() + (self._interval if success else min(self._retry_interval, self._interval))
+#             self._odmr_lock.release()
+#         self._q.log.info('ODMR refocus {} after {:.0f} s.'.format('finished' if success else 'did not find all transitions',
+#                                                                   time.time() - t0))
+
+#     def _staged_odmr(self, abort, main_nuclear):
+#         """Measure the missing transitions with growing range until every transition has been found."""
+#         tt = self._q.tt
+#         remaining = list(self._parameters['trans'])
+#         for stage, (span, step) in enumerate(self._ranges, 1):
+#             if abort.is_set() or self._shutdown.is_set():
+#                 return False
+#             self._q.log.info('ODMR refocus stage {}/{}: transitions {}, range {} MHz, step {} MHz.'.format(
+#                 stage, len(self._ranges), remaining, span, step))
+#             nuclear = self._build_nuclear(remaining, span, step)
+#             nuclear.run(abort)
+#             self._wait_for_measurement(nuclear, abort, main_nuclear)
+#             if abort.is_set():
+#                 return False
+#             found = self._evaluate(nuclear, remaining, span, step)
+#             for transition, offset in found.items():
+#                 attribute = 'mw_mixing_frequency_' + transition
+#                 setattr(tt, attribute, getattr(tt, attribute) + offset)
+#                 self._q.log.info('ODMR refocus: transition {} shifted by {:+.3f} MHz.'.format(transition, offset))
+#             remaining = [t for t in remaining if t not in found]
+#             if not remaining:
+#                 return True
+#             self._q.log.warning('ODMR refocus: no line found for {} within {} MHz.'.format(remaining, span))
+#         self._q.log.error('ODMR refocus: no line found for {} in any range.'.format(remaining))
+#         return False
+
+#     def _wait_for_measurement(self, nuclear, abort, main_nuclear):
+#         q = self._q
+#         while q._measurement_running(nuclear):
+#             if (self._shutdown.is_set() or q._queue_thread.stop_request.is_set() or
+#                     (main_nuclear is not None and not q._measurement_running(main_nuclear))):
+#                 abort.set()           # shutdown, or the user stopped the queue / the paused script ended
+#             time.sleep(0.2)
+
+#     def _evaluate(self, nuclear, transitions, span, step):
+#         """Fit the averaged counts. Returns {transition: offset in MHz} for every transition with a clear line."""
+#         pld = nuclear.pld
+#         try:
+#             pld._custom_default_settings = types.MethodType(self._odmr_plot_defaults, pld)
+#             pld.fit_function = 'lorentz'
+#             pld.set_custom_default_settings()
+#             pld.update_data_fit_results(pld.data_selected)
+#             df = pld.data_fit_results.df
+#             if hasattr(pld, '_gui'):
+#                 try:
+#                     pld.update_plot_fit()              # show the fit in the plot window
+#                 except Exception:
+#                     traceback.print_exc()
+#         except Exception:
+#             traceback.print_exc()
+#             return {}
+#         if 'trans' in df.columns:
+#             labels = list(df['trans'])
+#         else:
+#             labels = sorted(transitions)      # the fits are made in alphabetical order of the transitions
+#         found = {}
+#         for label, result in zip(labels, df['fit_result']):
+#             ok, center = self._line_found(result, span, step)
+#             self._q.log.info('ODMR refocus: transition {}: center {:+.3f} MHz, {}.'.format(
+#                 label, center if center is not None else float('nan'), 'line found' if ok else 'no clear line'))
+#             if ok:
+#                 found[label] = center
+#         return found
+
+#     def _line_found(self, result, span, step):
+#         """Is there a line in the fit: not at the edge of the sweep, enough contrast, enough signal to noise."""
+#         try:
+#             params = result.params
+#             center = float(params['center'].value)
+#             if abs(center) > 0.5 * span - 2.0 * step:
+#                 return False, center
+#             if all(name in params for name in ('a', 'g', 'c')):
+#                 a, g, c = float(params['a'].value), abs(float(params['g'].value)), float(params['c'].value)
+#                 if g <= 0 or c == 0:
+#                     return False, center
+#                 if abs(100.0 * a / (np.pi * g * c)) < self._min_contrast:
+#                     return False, center
+#                 residual = getattr(result, 'residual', None)
+#                 noise = float(np.std(residual)) if residual is not None else 0.0
+#                 if noise > 0 and abs(a / (np.pi * g)) < self._min_snr * noise:
+#                     return False, center
+#                 if not 0.5 * step <= g <= 0.5 * span:
+#                     return False, center
+#             return True, center
+#         except Exception:
+#             traceback.print_exc()
+#             return False, None
+
+#     # ------------------------------------------------------------------------------------------------------
+#     # the measurement (the settings of the user script ODMR_Refocus)
+#     # ------------------------------------------------------------------------------------------------------
+#     def _build_nuclear(self, transitions, span, step):
+#         from qudi.logic.NuclearOPs import NuclearOPs
+#         from qudi.logic.qudip_enhanced import data_handling
+#         import qudi.notebooks.UserScripts.helpers.sequence_creation_helpers as sch
+#         import qudi.notebooks.UserScripts.helpers.snippets_awg as sna
+#         import qudi.logic.mcas.elements as E
+
+#         q = self._q
+#         p = self._parameters
+#         script_path = os.path.join(q.user_script_folder, 'ODMR_Refocus_auto.py')   # only used for the save location
+
+#         def ret_mcas(self, current_iterator_df, sequence_name=None):
+#             sequence_name = 'NuclearOps' if sequence_name is None else sequence_name
+#             mcas = self.queue._awg.mcas(name=sequence_name, ch_dict={'2g': [1, 2], 'ps': [1]})
+#             trans = {}
+#             for idx, _I_ in current_iterator_df.iterrows():
+#                 for t in ['L', 'C', 'R']:
+#                     for i in [1, 2]:
+#                         trans[t + str(i)] = self.queue.tt.mfl(
+#                             td={self.queue._transition_tracker.si29_list[0]: [-0.5, 0.5]}, ms_trans=t)[i - 1]
+#                 state = 'p12' if 'R' in _I_['trans'] else 'm12'
+#                 sna.repump(mcas, 10)
+#                 sna.electron_init(mcas, state, _I_['init_time'], [trans['L1'], trans['L2']], [trans['R1'], trans['R2']],
+#                                   segment_length=10, max_amp=_I_['init_amp'])
+#                 mcas.start_new_segment(name='sequence', loop_count=1)
+#                 mcas.asc(length_mus=E.round_length_mus_to_x_multiple_ps(1))
+
+#                 amp, pi_dur, pi2_dur = sna.get_hardcoded_e_values_for_control(_I_['trans'] + '2')
+#                 amp = amp / _I_['factor']
+#                 pi_dur = pi_dur * _I_['factor']
+#                 t = _I_['trans']
+#                 freq1 = np.mean([trans[t + '1'], trans[t + '2']]) + _I_['mw_freq']
+
+#                 mcas.asc(length_mus=E.round_length_mus_to_x_multiple_ps(0.256), gateMW=True, name='gateMW')
+#                 mcas.asc(length_mus=10, gateMW=True, name='gateMW')
+#                 sna.electron_rabi(mcas, new_segment=True, length_mus=E.round_length_mus_to_x_multiple_ps(pi_dur),
+#                                   gateMW=True, amplitudes=[amp], frequencies=[freq1], mixer_deg=[-90],
+#                                   pulseshape='sinehermite')
+#                 if 'C' in _I_['trans']:
+#                     amp_project = self.queue.tt.RP('e_rabi_ou350deg-90-R2', omega=_I_['omega']).amp
+#                     pi_dur_project = E.round_length_mus_to_x_multiple_ps(
+#                         self.queue.tt.RP('e_rabi_ou350deg-90-L2', omega=_I_['omega']).pi)
+#                     mcas.asc(length_mus=E.round_length_mus_to_x_multiple_ps(0.256), gateMW=True, name='gateMW')
+#                     sna.electron_rabi(mcas, new_segment=True, length_mus=E.round_length_mus_to_x_multiple_ps(pi_dur_project),
+#                                       gateMW=True, amplitudes=[amp_project, amp_project],
+#                                       frequencies=[trans['L1'], trans['L2']], mixer_deg=[-90, -90],
+#                                       pulseshape='sinehermite')
+#                 nuc = 'ple_A2' if _I_['readout'] == 'A2' else 'ple_A1'
+#                 sna.ssr(mcas=mcas, queue=self.queue, frequencies=[3000], wait_dur=0.0, robust=False, nuc=nuc,
+#                         mixer_deg=-90, eom_ampl=0.0, step_idx=0,
+#                         laser_dur=E.round_length_mus_to_x_multiple_ps(_I_['t_read']))
+#                 mcas.asc(length_mus=E.round_length_mus_to_x_multiple_ps(0.512), name='sequence wait 2')
+#             self.queue._gated_counter.set_n_values(mcas, self.number_of_simultaneous_measurements)
+#             return mcas
+
+#         def create_nuclear():
+#             nuc = NuclearOPs()
+#             nuc.make_save_location_params(script_path=script_path, folder=self.DATA_FOLDER, sub_folder_kw="UserScripts")
+#             title = "NuclearOPs{}_{}".format(
+#                 nuc.file_name, datetime.datetime.strftime(nuc.date_of_creation, nuc.__TITLE_DATE_FORMAT__))
+#             nuc.pld = data_handling.PlotData(title=title, gui=self._plot)    # the plot window is made here
+#             return nuc
+
+#         # Qt widgets (the plot window) can only be created in the GUI thread
+#         nuclear = self._main_thread.call(create_nuclear) if self._plot else create_nuclear()
+#         self._windows_current.append(nuclear)
+#         nuclear.file_notes = ''
+#         nuclear.queue = q
+#         sch.settings(nuclear=nuclear, ret_mcas=ret_mcas, analyze_sequence=[['result', '>', 1, 1, 0, 1]], pdc={},
+#                      meas_code='# ODMR refocus of the queue (ODMRRefocuser in queue_logic.py)\n# {}\n'.format(dict(p)),
+#                      script_path=script_path)
+
+#         confocal_refocus = p['confocal_refocus']
+#         if confocal_refocus is None:
+#             confocal_refocus = getattr(q, '_optimizer_runner', None) is not None
+#         nuclear.x_axis_title = 'Freq [MHz]'
+#         nuclear.analyze_type = 'average'
+#         nuclear.save_smartly = False
+#         nuclear.do_ple_refocusA1 = False
+#         nuclear.do_ple_refocusA2 = False
+#         nuclear.refocus_cw_odmr = False
+#         nuclear.refocus_pulsed_odmr = False
+#         nuclear.do_confocal_repump_refocus = False
+#         nuclear.do_confocal_A1A2_refocus = bool(confocal_refocus)
+#         nuclear.do_confocal_A2MW_refocus = False
+#         nuclear.check_A2_power = False
+#         nuclear.do_repump = False
+#         nuclear.ple_refocus_interval = 200
+#         nuclear.confocal_refocus_interval = 200
+#         nuclear.odmr_refocus_interval = 1800
+#         nuclear.allow_periodic_ODMR_refocus = False       # never refocus during a refocus
+#         q._gated_counter.trace.consecutive_valid_result_numbers = [0]
+#         q._gated_counter.trace.average_results = False
+#         q._gated_counter.readout_duration = 15 * 1e6
+#         nuclear.pld.fit_function = 'lorentz'
+#         # applied by the plot at every new data point: counts versus mw frequency, averaged over the sweeps
+#         nuclear.pld._custom_default_settings = types.MethodType(self._odmr_plot_defaults, nuclear.pld)
+#         nuclear.hashed = False
+#         nuclear.debug_mode = False
+
+#         mw_freq = np.arange(-span / 2.0, span / 2.0, step)
+#         nuclear.parameters = collections.OrderedDict((
+#             ('sweeps', range(int(p['sweeps']))),
+#             ('A2_power', [p['A2_power']]),
+#             ('omega', [p['omega']]),
+#             ('t_read', [p['t_read']]),
+#             ('readout', [p['readout']]),
+#             ('init_time', [p['init_time']]),
+#             ('init_amp', [p['init_amp']]),
+#             ('factor', [p['factor']]),
+#             ('trans', list(transitions)),
+#             ('mw_freq', mw_freq),
+#         ))
+#         nuclear.number_of_simultaneous_measurements = int(min(int(p['n_simultaneous']), len(mw_freq)))
+#         return nuclear
+    
+#     def _odmr_plot_defaults(pld):
+#         """Plot of the ODMR refocus: counts versus mw frequency, averaged over the sweeps."""
+#         pld.x_axis_parameter_list.update_selected_value('mw_freq')
+#         pld.average_parameter_list.update_selected_data(['sweeps'])
+#         pld.observation_list.update_selected_data(['average_counts'])
+
+#     # ------------------------------------------------------------------------------------------------------
+#     # shared hardware state
+#     # ------------------------------------------------------------------------------------------------------
+#     def _snapshot(self):
+#         """The ODMR overwrites settings of the shared gated counter; a paused script needs them back."""
+#         gated_counter = self._q._gated_counter
+#         trace = getattr(gated_counter, 'trace', None)
+#         state = {'readout_duration': copy.deepcopy(getattr(gated_counter, 'readout_duration', None)), 'trace': {}}
+#         for name in self.TRACE_SETTINGS:
+#             try:
+#                 state['trace'][name] = copy.deepcopy(getattr(trace, name))
+#             except Exception:
+#                 pass
+#         return state
+
+#     def _restore(self, state):
+#         gated_counter = self._q._gated_counter
+#         try:
+#             if state['readout_duration'] is not None:
+#                 gated_counter.readout_duration = state['readout_duration']
+#             for name, value in state['trace'].items():
+#                 setattr(gated_counter.trace, name, value)
+#         except Exception:
+#             traceback.print_exc()
+
+#     def _close_windows(self, nuclears):
+#         for nuclear in nuclears:
+#             try:
+#                 if hasattr(nuclear.pld, '_gui'):
+#                     nuclear.pld.gui.close_gui()
+#             except Exception:
+#                 pass
+
+#     def _stop_awgs(self):
+#         try:
+#             self._q._awg.mcas_dict.stop_awgs()
+#         except Exception:
+#             pass
+
 
 # ----------------------------
 # Original ScriptQueueStep & ScriptQueueList (kept as-is)
@@ -268,15 +790,17 @@ class QueueLogic(LogicBase):
     # make some modules optional. This will make them "None"
     # This will raise 'NoneType' object has no attribute ...
     # errors if the modules are called from other scripts. e.g.
-    # when NuclearOps calls queue.optimize_logic
+    # when NuclearOps calls queue._confocal
+    scanning_logic              = Connector(interface = 'ScanningProbeLogic', optional = True)
     optimize_logic              = Connector(interface = 'ScanningOptimizeLogic', optional = True)
+    fastcounter                 = Connector(interface = 'TimeTaggerInterface', optional = True)
     PLE_logic                   = Connector("LaserScannerLogic", optional = True)
     currentmeasurementlogic     = Connector("CurrentMeasurementLogic", optional = True)
     biaslogic                   = Connector("BiasLogic", optional = True)
     poimanagerlogic             = Connector('PoiManagerLogic', optional = True)
     powerstabilization_logic    = Connector("PowerStabilizationLogic", optional = True)
     counterlogic1               = Connector("CounterLogic", optional = True)
-
+    odmr_refocuser              = Connector("ODMRRefocuser", optional = True)
 
     update_selected_user_script_combo_box_signal = Signal(collections.OrderedDict)
     update_queue_list = Signal(collections.OrderedDict)
@@ -285,13 +809,6 @@ class QueueLogic(LogicBase):
     _StopTimeout = 60.
 
     __TIME_FORMAT_STR__ = '%Y%m%d-h%Hm%Ms%S'
-
-    # smiq_visa_device = 'GPIB0::28::INSTR'
-    # app_dir = r'D:/Python/pi3diamond'
-    # log_dir = '{}/log/'.format(app_dir)
-    # log_archive_dir = '{}/log/archive/'.format(app_dir)
-    # log_single_val_dir = '{}/log/single_values/'.format(app_dir)
-    # log_tmp = '{}/log/temp/'.format(app_dir)
 
     def _optional_module(self, name):
         """Return the connected module, or None (with a warning) if it is not in the config."""
@@ -309,9 +826,6 @@ class QueueLogic(LogicBase):
         self._threadlock=Mutex()
         self.script_history = []
 
-        # ----------------------------
-        # Adapter state for new GUI
-        # ----------------------------
         self.signals = QueueSignals()   # exposes task_added, task_updated, log_output
         self.tasks = []                 # list[ScriptTask] visible to GUI
         self._task_by_id = {}           # id -> ScriptTask
@@ -323,9 +837,11 @@ class QueueLogic(LogicBase):
         self._abort_current_only = False
         # guards current_script / stop_request / script_queue between the queue thread and GUI calls
         self._control_lock = threading.RLock()
+        # AWG and counter: held by the queue thread while a script runs and by the ODMRRefocuser while it measures
+        self._hw_lock = threading.Lock() # hardware lock
+        self._odmr_refocuser = None
 
     def on_activate(self):
-
         # crucial modules
         self._awg                       = self.mcas_dict_holder()
         self._transition_tracker        = self.transition_tracker()
@@ -339,10 +855,21 @@ class QueueLogic(LogicBase):
         self._biaslogic                 = self._optional_module('biaslogic')
         self._powerstabilization_logic  = self._optional_module('powerstabilization_logic')
         self._poimanagerlogic           = self._optional_module('poimanagerlogic')
-        self._counter                   = self._optional_module('counterlogic1') # --> needs connector to TT instead of nidaq
+        self._counter                   = self._optional_module('counterlogic1')
         
         self.tt = self._transition_tracker # FIXME give the already correct name in lines 253. Maybe both names are used in other files
-        #self.create_odmr()  #only logic (no gui)
+        self._odmr_refocuser = self.odmr_refocuser()
+        # self._odmr_refocuser = ODMRRefocuser(
+        #     self,
+        #     interval=self._odmr_refocus_interval,
+        #     ranges=self._odmr_refocus_ranges,
+        #     parameters=self._odmr_refocus_parameters,
+        #     min_contrast=self._odmr_refocus_min_contrast,
+        #     min_snr=self._odmr_refocus_min_snr,
+        #     pause_timeout=self._odmr_refocus_pause_timeout,
+        #     run_on_activation=self._odmr_refocus_on_activation,
+        #     plot=self._odmr_refocus_plot,
+        # )
         # odmr should be run via NucOps refocus script
         # data should be tracked and visualized via TT logic and gui
         # create_odmr could then be used to keep a global tracking time 
@@ -352,6 +879,8 @@ class QueueLogic(LogicBase):
         self.write_standard_awg_sequences()
 
     def on_deactivate(self):
+        # if getattr(self, '_odmr_refocuser', None) is not None:
+        #     self._odmr_refocuser.close()
         if getattr(self, '_optimizer_runner', None) is not None:
             self._optimizer_runner.close()
         # stop task monitor thread gracefully if active
@@ -361,8 +890,18 @@ class QueueLogic(LogicBase):
                 self._monitor_thread.join(timeout=1.0)
         except Exception:
             pass
-        # pass
-        #FIXME destroy me gently
+
+    def refocus_odmr_now(self):
+        """Make the ODMR refocus due now (it still waits for the permission of a running script)."""
+        if self._odmr_refocuser is None:
+            raise RuntimeError('The ODMR refocuser is not active.')
+        else:
+            self._odmr_refocuser.refocus_now()
+
+    def set_odmr_refocus_enabled(self, enabled):
+        """Switch the periodic ODMR refocus on or off."""
+        if self._odmr_refocuser is not None:
+            self._odmr_refocuser.enabled = bool(enabled)
 
     def run_optimizer(self, abort=None, timeout=300.0):
         """
@@ -375,7 +914,7 @@ class QueueLogic(LogicBase):
 
     @property
     def md(self):
-        return self._mcas_dict#
+        return self._mcas_dict
 
     @property
     def gui(self):
@@ -387,7 +926,7 @@ class QueueLogic(LogicBase):
     #     self._timetagger = TimeTaggerHandler.init_timetagger()
 
     def init_run(self):
-        self.user_script_folder = r"C:/src/squdi/src/qudi/notebooks/UserScripts"
+        self.user_script_folder = r"C:\Users\Erik Hesselmeier\Desktop\test_squdi\src\qudi\notebooks\UserScripts"
         #self.user_script_folder = QUDI_DIR+"/notebooks/UserScripts/29Si5"
         self._script_queue = ScriptQueueList(oktypes=(ScriptQueueStep), list_owner=self)
         self.q = Queue() # use connector
@@ -537,26 +1076,18 @@ class QueueLogic(LogicBase):
     # script queue
     ####################################################################################################################
     def run(self):
-
-
-        ## Why this is needed??????
-
-        #from tools_2 import emod
-        #emod.JobManager().start() ## maybe this is something which makes multiple sequences actuakly working.
-
-        # start the CronDaemon
-        #from tools_2 import cron
-        #cron.CronDaemon().start()
-        #self.dummy_test_variable = 123
-
         while True:
             if self._queue_thread.stop_request.is_set():
                 self.q.queue.clear()
                 self.script_queue.list = []
                 self._queue_thread.stop_request.clear()
             task = None
-            try: ### runs the measurement!
+            hw_locked = False
+            try: # runs the measurement!
                 item = self.q.get()
+                # a due ODMR refocus is done before the next script starts (the hardware is free between two scripts)
+                if self._odmr_refocuser is not None:
+                    self._odmr_refocuser.run_if_due()
                 with self._control_lock:
                     self.current_script = item
                     self._queue_thread.stop_request.clear() # this is necessary although it shouldn't be.
@@ -578,6 +1109,9 @@ class QueueLogic(LogicBase):
                     self.q.task_done()
                     continue
 
+                # exclusive use of AWG and counter; waits while an ODMR refocus is measuring
+                self._hw_lock.acquire()
+                hw_locked = True
                 self._set_task_status(task, Status.RUNNING, start=True)
                 self.log.info("Starting Userscript {}...".format(module_name[10:]))
 
@@ -593,6 +1127,8 @@ class QueueLogic(LogicBase):
                 # Block here until that thread has really finished, so the next script
                 # in the queue cannot start while this one is still measuring.
                 self._wait_for_script(module_name, task, previous_start_time)
+                self._hw_lock.release()      # the measurement is over, hardware free for a refocus
+                hw_locked = False
 
                 with self._control_lock:
                     aborted = self._queue_thread.stop_request.is_set()
@@ -617,6 +1153,9 @@ class QueueLogic(LogicBase):
                         self._wait_for_script(current)
                 except Exception:
                     pass
+                if hw_locked:
+                    self._hw_lock.release()
+                    hw_locked = False
                 self._set_task_status(task, Status.ERROR, end=True)
                 self.q.queue.clear()
                 self.script_queue.list = []
@@ -753,7 +1292,13 @@ class QueueLogic(LogicBase):
             #Instead emit a signal which will updates it.
             self.update_selected_user_script_combo_box_signal.emit(val)
 
+    @Slot(str)
+    def start_measurement(self):
+        print("measurement started")
+
     # Convenience wrapper for GUI: accept a Path and add it to queue
+    # TODO here connect to API module?
+    # @QtCore.Slot(str)
     def add_task(self, path):
         """
         GUI-friendly add: path is a pathlib.Path or string path to a .py file
@@ -817,38 +1362,8 @@ class QueueLogic(LogicBase):
             #if hasattr(self, '_gui'):
                 #self.gui.update_user_script_folder_text_field(val)
 
-    
-
-    # Convenience wrapper for GUI: accept a Path and add it to queue
-    def add_task(self, path):
-        """
-        GUI-friendly add: path is a pathlib.Path or string path to a .py file
-        It extracts folder and module name and calls add_to_queue.
-        """
-        try:
-            p = path if isinstance(path, str) else str(path)
-            folder, base = os.path.split(p)
-            name = os.path.splitext(base)[0]
-            # Temporarily set user_script_folder so set_user_script_list doesn't override
-            old_folder = getattr(self, '_user_script_folder', None)
-            self.user_script_folder = folder
-            # set selected user script if possible
-            try:
-                if name in self.user_script_list:
-                    self.selected_user_script = name
-            except Exception:
-                # ignore
-                pass
-            # add to queue using existing routine
-            self.add_to_queue(name=name, pd=self.user_script_params, folder=folder)
-            # restore folder (keep it changed because GUI may expect the new folder)
-            # self.user_script_folder = old_folder
-        except Exception:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            traceback.print_exception(exc_type, exc_value, exc_tb)
-
     def add_rco(self):
-        folder = r"C:/src/squdi/src/qudi/notebooks/UserScripts"
+        folder = r"C:\src\qudi\notebooks\UserScripts"
         name = 'refocus_confocal_odmr'
         pd = self.user_script_params
         self.add_to_queue(name, pd, folder)
@@ -881,13 +1396,6 @@ class QueueLogic(LogicBase):
         task = self._task_by_module.get(item.get('module_name'))
         self._set_task_status(task, Status.ABORTED)
 
-    def create_odmr(self):
-        # seperate class which tracks the ODMR over time?
-        # --> This should be handeled by TransitionTracker
-        # Could be handy if scan ranges need to be changed.
-        self.odmr = odmr.ODMR(self)
-
-
     def init_task(self, name, folder=None):
         folder = self.user_script_folder if folder is None else folder
         funa = "{}/{}.py".format(folder, name)
@@ -905,7 +1413,7 @@ class QueueLogic(LogicBase):
         self._queue_thread.stop_request.set()
 
     def write_standard_awg_sequences(self):
-        self.add_to_queue('standard_awg_sequences', folder='C:/src/squdi/src/qudi/notebooks/UserScripts/helpers')
+        self.add_to_queue('standard_awg_sequences', folder='C:/Users/Erik Hesselmeier/Desktop/test_squdi/src/qudi/notebooks/UserScripts/helpers')
         #self.add_to_queue('standard_awg_sequences', folder=QUDI_DIR+'/notebooks/UserScripts/helpers')
 
     def dl(self, key, *args, **kwargs):

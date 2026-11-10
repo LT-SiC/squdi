@@ -1543,7 +1543,7 @@ class TransitionTracker(LogicBase):
 
                 shutil.copy(os.path.join(folder,original),os.path.join(folder,copy))
         
-        script_folder=r"C:/src/squdi/src/qudi/notebooks/UserScripts"
+        script_folder=r"C:\Users\Erik Hesselmeier\Desktop\test_squdi\src\qudi\notebooks\UserScripts"
         shutil.copytree(os.path.join(script_folder,"29Si5"),os.path.join(script_folder,f"{str(spin_names).replace('.',',')}"[2:-2]))
         print("you need to restart qudi for the transition tracker to update")
 

@@ -29,7 +29,7 @@ except AttributeError:
     # pandas < 1.0
     NA = np.nan
 
-from pyqtgraph import ScatterPlotItem
+from pyqtgraph import ScatterPlotItem, TextItem
 from natsort import natsorted
 
 import warnings
@@ -160,7 +160,7 @@ class CouplingTableWidget(QtWidgets.QWidget):
         df_long.columns = ['spin_i', 'spin_j', 'coupling']
         df_long['coupling'] = df_long['coupling'].astype('float64')
         # Save
-        df_long.to_hdf(r"C:/src/squdi/src/qudi/log/transition_tracker_log/couplings_df"+f"_{self.subspace}"+"_live.hdf", key='data', mode='w', format='table')
+        df_long.to_hdf(r"C:\Users\Erik Hesselmeier\Desktop\superqudi\qudi-iqo-modules\src\qudi\log\transition_tracker_log\couplings_df"+f"_{self.subspace}"+"_live.hdf", key='data', mode='w', format='table')
 
     def save_backup_hdf(self):
         # Convert to long format, suppress pandas FutureWarning
@@ -171,8 +171,8 @@ class CouplingTableWidget(QtWidgets.QWidget):
         df_long.columns = ['spin_i', 'spin_j', 'coupling']
         df_long['coupling'] = df_long['coupling'].astype('float64')
         # Save
-        df_long.to_hdf(r"C:/src/squdi/src/qudi/log/transition_tracker_log/couplings_df"+f"_{self.subspace}"+"_backup.hdf", key='data', mode='w', format='table')
-        df_long.to_hdf(r"C:/src/squdi/src/qudi/log/transition_tracker_log/couplings_log/couplings_df"+f"_{self.subspace}"+f"_log{nowstr()}.hdf", key='data', mode='w', format='table')
+        df_long.to_hdf(r"C:\Users\Erik Hesselmeier\Desktop\superqudi\qudi-iqo-modules\src\qudi\log\transition_tracker_log\couplings_df"+f"_{self.subspace}"+"_backup.hdf", key='data', mode='w', format='table')
+        df_long.to_hdf(r"C:\Users\Erik Hesselmeier\Desktop\superqudi\qudi-iqo-modules\src\qudi\log\transition_tracker_log\couplings_log\couplings_df"+f"_{self.subspace}"+f"_log{nowstr()}.hdf", key='data', mode='w', format='table')
         
 class DataFrameTableWidget(QtWidgets.QWidget):
     """

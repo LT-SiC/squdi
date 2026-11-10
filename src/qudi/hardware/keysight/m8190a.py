@@ -16,7 +16,7 @@ Example config:
         address: 'TCPIP0::localhost::inst0::INSTR'
         name: '2g'
         channels: [1, 2]
-        settings_folder: 'C:/src/squdi/src/qudi/hardware/keysight/hardware_settings'
+        settings_folder: 'C:/src/qudi/hardware/keysight/hardware_settings'
 """
 import os
 

@@ -282,7 +282,6 @@ class PlotData(gui_helpers.WithQt):
     @printexception
     def __init__(self, title=None, parent=None, gui=True, **kwargs):
         """
-
         :param title:
         :param parent:
         :param gui:
