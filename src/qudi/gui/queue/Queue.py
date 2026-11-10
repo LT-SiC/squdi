@@ -98,7 +98,7 @@ class QueueGui(GuiBase):
     """
     # Connect to the Queue.
     queue_logic = Connector(interface="QueueLogic")  # class name
-    scripts_folder=StatusVar('scripts_folder', "C:/Users/Erik Hesselmeier/Desktop/test_squdi/src/qudi/notebooks/UserScripts")#r"C:\src\qudi\notebooks\UserScripts"
+    scripts_folder=StatusVar('scripts_folder', "C:/Users/ehess/OneDrive/Dokumente/Software/squdi/src/qudi/notebooks/UserScripts")#r"C:\src\qudi\notebooks\UserScripts"
     #scripts_folder=StatusVar('scripts_folder', QUDI_DIR+"/notebooks/UserScripts")#r"C:\src\qudi\notebooks\UserScripts"
     # def __init__(self):
     #     # real internal QMainWindow
@@ -213,7 +213,7 @@ class QueueGui(GuiBase):
 
     # ---- UI callbacks ----
     def select_folder(self):
-        d = QtWidgets.QFileDialog.getExistingDirectory(self._win, "Select Folder", r"C:/Users/Erik Hesselmeier/Desktop/test_squdi/src/qudi/notebooks/UserScripts")#str(Path.cwd())
+        d = QtWidgets.QFileDialog.getExistingDirectory(self._win, "Select Folder", "C:/Users/ehess/OneDrive/Dokumente/Software/squdi/src/qudi/notebooks/UserScripts")#str(Path.cwd())
         if d:
             self.folder_line.setText(d)
             self.refresh_py_list()

@@ -25,6 +25,7 @@ import shutil
 import collections
 import collections.abc
 import copy
+import types
 import numpy as np
 from qudi.util.mutex import Mutex
 
@@ -34,13 +35,12 @@ from qudi.util.mutex import Mutex
 import uuid
 
 # Lightweight Status enum for GUI
-try:
-    # Python 3 Enum exists
-    from enum import Enum
-except Exception:
-    Enum = object
+from enum import Enum
 
-#QUDI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
+
+current_folder = Path(__file__).resolve().parent
+QUDI_DIR = str(current_folder.parent.parent)
 
 class Status(Enum):
     QUEUED = "Queued"
@@ -49,6 +49,7 @@ class Status(Enum):
     COMPLETED = "Completed"
     ERROR = "Error"
     ABORTED = "Aborted"
+
 
 # @dataclass
 # class ScriptTask:
@@ -800,7 +801,8 @@ class QueueLogic(LogicBase):
     poimanagerlogic             = Connector('PoiManagerLogic', optional = True)
     powerstabilization_logic    = Connector("PowerStabilizationLogic", optional = True)
     counterlogic1               = Connector("CounterLogic", optional = True)
-    odmr_refocuser              = Connector("ODMRRefocuser", optional = True)
+
+    
 
     update_selected_user_script_combo_box_signal = Signal(collections.OrderedDict)
     update_queue_list = Signal(collections.OrderedDict)
@@ -841,6 +843,8 @@ class QueueLogic(LogicBase):
         self._hw_lock = threading.Lock() # hardware lock
         self._odmr_refocuser = None
 
+        
+
     def on_activate(self):
         # crucial modules
         self._awg                       = self.mcas_dict_holder()
@@ -858,7 +862,6 @@ class QueueLogic(LogicBase):
         self._counter                   = self._optional_module('counterlogic1')
         
         self.tt = self._transition_tracker # FIXME give the already correct name in lines 253. Maybe both names are used in other files
-        self._odmr_refocuser = self.odmr_refocuser()
         # self._odmr_refocuser = ODMRRefocuser(
         #     self,
         #     interval=self._odmr_refocus_interval,
@@ -875,6 +878,8 @@ class QueueLogic(LogicBase):
         # create_odmr could then be used to keep a global tracking time 
         # of odmr refocus. Such that it does not refocus before each measurement
         # or after a fixed measurement time but globally once an hour.
+        self.notebook_folder = QUDI_DIR + r'\notebooks'
+        self.user_script_folder = self.notebook_folder + r'\UserScripts'
         self.init_run()
         self.write_standard_awg_sequences()
 
@@ -891,12 +896,21 @@ class QueueLogic(LogicBase):
         except Exception:
             pass
 
+    def register_odmr_refocuser(self, refocuser):
+        """Called by the ODMRRefocuser module when it is activated. The refocuser connects to the queue and not the
+        other way round (two modules that connect to each other can not be activated); between two scripts the queue
+        calls refocuser.run_if_due()."""
+        self._odmr_refocuser = refocuser
+
+    def unregister_odmr_refocuser(self, refocuser):
+        if self._odmr_refocuser is refocuser:
+            self._odmr_refocuser = None
+
     def refocus_odmr_now(self):
         """Make the ODMR refocus due now (it still waits for the permission of a running script)."""
         if self._odmr_refocuser is None:
             raise RuntimeError('The ODMR refocuser is not active.')
-        else:
-            self._odmr_refocuser.refocus_now()
+        self._odmr_refocuser.refocus_now()
 
     def set_odmr_refocus_enabled(self, enabled):
         """Switch the periodic ODMR refocus on or off."""
@@ -914,7 +928,7 @@ class QueueLogic(LogicBase):
 
     @property
     def md(self):
-        return self._mcas_dict
+        return self._mcas_dict#
 
     @property
     def gui(self):
@@ -926,7 +940,6 @@ class QueueLogic(LogicBase):
     #     self._timetagger = TimeTaggerHandler.init_timetagger()
 
     def init_run(self):
-        self.user_script_folder = r"C:\Users\Erik Hesselmeier\Desktop\test_squdi\src\qudi\notebooks\UserScripts"
         #self.user_script_folder = QUDI_DIR+"/notebooks/UserScripts/29Si5"
         self._script_queue = ScriptQueueList(oktypes=(ScriptQueueStep), list_owner=self)
         self.q = Queue() # use connector
@@ -1292,13 +1305,7 @@ class QueueLogic(LogicBase):
             #Instead emit a signal which will updates it.
             self.update_selected_user_script_combo_box_signal.emit(val)
 
-    @Slot(str)
-    def start_measurement(self):
-        print("measurement started")
-
     # Convenience wrapper for GUI: accept a Path and add it to queue
-    # TODO here connect to API module?
-    # @QtCore.Slot(str)
     def add_task(self, path):
         """
         GUI-friendly add: path is a pathlib.Path or string path to a .py file
@@ -1355,15 +1362,41 @@ class QueueLogic(LogicBase):
 
     @user_script_folder.setter
     def user_script_folder(self, val):
-        if os.path.isdir(val):
-            self._user_script_folder = val
-            self.set_user_script_list()
-            #This now is done in gui automatically.
-            #if hasattr(self, '_gui'):
-                #self.gui.update_user_script_folder_text_field(val)
+        if not os.path.isdir(val):
+            raise ValueError(f"User script folder does not exist: {val}")
+        self._user_script_folder = val
+        self.set_user_script_list()
+
+    # Convenience wrapper for GUI: accept a Path and add it to queue
+    def add_task(self, path):
+        """
+        GUI-friendly add: path is a pathlib.Path or string path to a .py file
+        It extracts folder and module name and calls add_to_queue.
+        """
+        try:
+            p = path if isinstance(path, str) else str(path)
+            folder, base = os.path.split(p)
+            name = os.path.splitext(base)[0]
+            # Temporarily set user_script_folder so set_user_script_list doesn't override
+            old_folder = getattr(self, '_user_script_folder', None)
+            self.user_script_folder = folder
+            # set selected user script if possible
+            try:
+                if name in self.user_script_list:
+                    self.selected_user_script = name
+            except Exception:
+                # ignore
+                pass
+            # add to queue using existing routine
+            self.add_to_queue(name=name, pd=self.user_script_params, folder=folder)
+            # restore folder (keep it changed because GUI may expect the new folder)
+            # self.user_script_folder = old_folder
+        except Exception:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_tb)
 
     def add_rco(self):
-        folder = r"C:\src\qudi\notebooks\UserScripts"
+        folder = self.user_script_folder
         name = 'refocus_confocal_odmr'
         pd = self.user_script_params
         self.add_to_queue(name, pd, folder)
@@ -1413,7 +1446,7 @@ class QueueLogic(LogicBase):
         self._queue_thread.stop_request.set()
 
     def write_standard_awg_sequences(self):
-        self.add_to_queue('standard_awg_sequences', folder='C:/Users/Erik Hesselmeier/Desktop/test_squdi/src/qudi/notebooks/UserScripts/helpers')
+        self.add_to_queue('standard_awg_sequences', folder=self.user_script_folder+'/helpers')
         #self.add_to_queue('standard_awg_sequences', folder=QUDI_DIR+'/notebooks/UserScripts/helpers')
 
     def dl(self, key, *args, **kwargs):

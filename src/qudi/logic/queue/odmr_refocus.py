@@ -3,22 +3,24 @@ from __future__ import print_function, absolute_import, division
 __metaclass__ = type
 
 import datetime
-from pathlib import Path
 import time
 import os
 import threading
-import time
 import traceback
-from qudi.core.module import LogicBase
-from qudi.core.connector import Connector
-from qudi.core.configoption import ConfigOption
-import multiprocess
+from pathlib import Path
 
 import collections
 import copy
 import types
+import multiprocess
 import numpy as np
-from path import Path
+
+from qudi.core.module import LogicBase
+from qudi.core.connector import Connector
+from qudi.core.configoption import ConfigOption
+from qudi.core.statusvariable import StatusVar
+# runs a function in the GUI thread (needed for the plot window); defined next to the queue logic
+from qudi.logic.queue.queue_logic import _MainThreadCaller
 
 class ODMRRefocuser(LogicBase):
     """
@@ -47,10 +49,10 @@ class ODMRRefocuser(LogicBase):
     closed when a new refocus starts. With plot=False no window is made.
     """
     DATA_FOLDER = r"D:/Data/NuclearOps"          # as in sequence_creation_helpers.create_nuclear
-    DEFAULT_RANGES = [(3.0, 0.2), (10.0, 0.3)]    # (span, step) in MHz
+    DEFAULT_RANGES = [(40.0, 0.25), (150.0, 1.0), (400.0, 2.0)]    # (span, step) in MHz
     DEFAULT_PARAMETERS = collections.OrderedDict([
-        ('trans', ['L', 'R', 'C']),
-        ('sweeps', 2),
+        ('trans', ['L', 'R']),
+        ('sweeps', 1),
         ('t_read', 2.048),
         ('readout', 'A2'),
         ('init_time', 50),
@@ -65,7 +67,13 @@ class ODMRRefocuser(LogicBase):
     TRACE_SETTINGS = ('analyze_type', 'number_of_simultaneous_measurements', 'analyze_sequence', 'binning_factor',
                           'average_results', 'consecutive_valid_result_numbers')
     
+    # The refocuser connects to the queue, the queue does NOT connect to the refocuser: two modules that connect to each
+    # other can not be activated (qudi activates the connected modules first, which never ends). The refocuser
+    # registers itself at the queue in on_activate instead.
     queue_logic       = Connector(interface = 'QueueLogic')
+
+    # time of the last successful refocus, kept between two sessions
+    _last_refocus_time = StatusVar(name='last_refocus_time', default=None)
 
     # periodic ODMR refocus of the mw frequencies (see ODMRRefocuser)
     _odmr_refocus_interval      = ConfigOption(name='odmr_refocus_interval', default=3600.0, missing='nothing')   # s, 0: off
@@ -76,6 +84,9 @@ class ODMRRefocuser(LogicBase):
     _odmr_refocus_pause_timeout = ConfigOption(name='odmr_refocus_pause_timeout', default=900.0, missing='nothing')
     _odmr_refocus_on_activation = ConfigOption(name='odmr_refocus_on_activation', default=False, missing='nothing')
     _odmr_refocus_plot          = ConfigOption(name='odmr_refocus_plot', default=True, missing='nothing')         # live plot window
+    # optional: folder with the data folders of the refocus (<timestamp>_ODMR_Refocus_auto), e.g.
+    # 'C:/.../NuclearOpsData/29Si5/ODMR_Refocus_auto'. The time of the newest one counts as time of the last refocus.
+    _odmr_refocus_data_folder   = ConfigOption(name='odmr_refocus_data_folder', default=None, missing='nothing')
 
     def __init__(self, config, **kwargs):
         """
@@ -90,26 +101,30 @@ class ODMRRefocuser(LogicBase):
         :param run_on_activation: refocus as soon as possible after the start, not only after one interval
         """
         super(ODMRRefocuser, self).__init__(config=config, **kwargs)
-        self.retry_interval=900.0
-        self.poll_interval=1.0
+        # Only plain attributes here. The thread is started in on_activate: qudi creates the module object when the
+        # config is loaded, long before on_activate, and the thread needs everything that on_activate sets up.
+        self.retry_interval = 900.0
+        self.poll_interval = 1.0
 
         self.enabled = True                       # periodic refocus can be switched off at run time
         self.last_result = None                   # summary of the last refocus
-        #self._next_due = time.time() + (0.0 if run_on_activation else self._interval)
+        self._q = None
+        self._interval = 0.0
+        self._retry_interval = self.retry_interval
+        self._next_due = float('inf')
         self._shutdown = threading.Event()
         self._odmr_lock = threading.Lock()        # only one ODMR at a time
         self._abort = None
         self._delay_logged = False
         self._thread = None
-        if self._odmr_refocus_interval > 0:
-            self._thread = threading.Thread(target=self._loop, name='odmr_refocuser', daemon=True)
-            self._thread.start()
+        self._plot = False
+        self._main_thread = None
+        self._windows_current = []                # NuclearOPs of this refocus (plot windows)
+        self._windows_previous = []               # of the refocus before
 
     def on_activate(self):
-        print("I AM NOW IN 'ON ACTIVATE'")
         self._q = self.queue_logic()
         self._interval = float(self._odmr_refocus_interval)
-        
         self._ranges = [(float(span), float(step)) for span, step in (self._odmr_refocus_ranges or self.DEFAULT_RANGES)]
         self._parameters = collections.OrderedDict(self.DEFAULT_PARAMETERS)
         self._parameters.update(self._odmr_refocus_parameters or {})
@@ -117,12 +132,31 @@ class ODMRRefocuser(LogicBase):
         self._min_snr = float(self._odmr_refocus_min_snr)
         self._pause_timeout = float(self._odmr_refocus_pause_timeout)
         self._retry_interval = float(self.retry_interval)
+        self._plot = bool(self._odmr_refocus_plot)
+        self._main_thread = _MainThreadCaller() if self._plot else None
+        self._windows_current = []
+        self._windows_previous = []
+        self._abort = None
+        self._delay_logged = False
+        self._shutdown = threading.Event()        # new one: the old one is set after a deactivation
 
-        self._next_due = self.get_last_refocus_time() + (0.0 if self._odmr_refocus_on_activation else self._interval)
-                
+        # due one interval after the last refocus; a refocus that is overdue (or odmr_refocus_on_activation) runs soon
+        last = self.get_last_refocus_time()
+        if last is None:
+            last = time.time()
+        self._next_due = last + (0.0 if self._odmr_refocus_on_activation else self._interval)
+
+        self._q.register_odmr_refocuser(self)     # the queue calls run_if_due between two scripts
+        if self._interval > 0:
+            self._thread = threading.Thread(target=self._loop, name='odmr_refocuser', daemon=True)
+            self._thread.start()
+
     def on_deactivate(self):
+        if self._q is not None:
+            self._q.unregister_odmr_refocuser(self)
         self.close()
-        
+        self._thread = None
+
     # ------------------------------------------------------------------------------------------------------
     # public
     # ------------------------------------------------------------------------------------------------------
@@ -135,25 +169,31 @@ class ODMRRefocuser(LogicBase):
         return self.enabled and self._interval > 0 and not self._shutdown.is_set() and time.time() >= self._next_due
 
     def get_last_refocus_time(self):
-        # Find folders matching the expected naming structure
-        f = r"C:/Users/Erik Hesselmeier/Desktop/NuclearOpsData/29Si5/ODMR_Refocus_auto" # TODO get the TransitionTrackerLog here
-        #TODO save fit result to tt log
+        """Time of the last successful refocus: from the saved status or from the newest data folder of the refocus
+        (odmr_refocus_data_folder), whichever is newer. None if neither is known."""
+        times = []
+        if self._last_refocus_time:
+            times.append(float(self._last_refocus_time))
+        folder_time = self._newest_data_folder_time()
+        if folder_time is not None:
+            times.append(folder_time)
+        return max(times) if times else None
 
-        folders = [
-            p for p in Path(f).iterdir()
-            #p for p in Path(self._q.user_script_folder).iterdir() #TODO why does this not work?
-            if p.is_dir()
-        ]
-
-        # Extract timestamps and select the newest folder
-        def folder_timestamp(folder):
-            timestamp_str = folder.name[:17]  # e.g. 20261028-h10m34s28
-            dt = datetime.datetime.strptime(timestamp_str, "%Y%m%d-h%Hm%Ms%S")
-            return dt.timestamp()
-
-        newest_folder = max(folders, key=folder_timestamp)
-        newest_time = folder_timestamp(newest_folder)
-        return newest_time
+    def _newest_data_folder_time(self):
+        if not self._odmr_refocus_data_folder:
+            return None
+        times = []
+        try:
+            for folder in Path(self._odmr_refocus_data_folder).iterdir():
+                if not folder.is_dir():
+                    continue
+                try:     # folder names start with the time, e.g. 20261028-h10m34s28_ODMR_Refocus_auto
+                    times.append(datetime.datetime.strptime(folder.name[:17], "%Y%m%d-h%Hm%Ms%S").timestamp())
+                except ValueError:
+                    continue
+        except OSError:
+            return None
+        return max(times) if times else None
 
     def refocus_now(self):
         """Make the refocus due now. It still waits for the hardware like the periodic one (permission, pause)."""
@@ -268,6 +308,8 @@ class ODMRRefocuser(LogicBase):
             self._windows_current = []
             self._delay_logged = False
             self.last_result = {'success': success, 'finished': time.time(), 'duration': time.time() - t0}
+            if success:
+                self._last_refocus_time = time.time()      # status variable
             self._next_due = time.time() + (self._interval if success else min(self._retry_interval, self._interval))
             self._odmr_lock.release()
         self._q.log.info('ODMR refocus {} after {:.0f} s.'.format('finished' if success else 'did not find all transitions',
@@ -433,7 +475,7 @@ class ODMRRefocuser(LogicBase):
         nuclear.file_notes = ''
         nuclear.queue = q
         sch.settings(nuclear=nuclear, ret_mcas=ret_mcas, analyze_sequence=[['result', '>', 1, 1, 0, 1]], pdc={},
-                     meas_code='# ODMR refocus of the queue (ODMRRefocuser in queue_logic.py)\n# {}\n'.format(dict(p)),
+                     meas_code='# ODMR refocus of the queue (ODMRRefocuser in odmr_refocus.py)\n# {}\n'.format(dict(p)),
                      script_path=script_path)
 
         confocal_refocus = p['confocal_refocus']
@@ -480,6 +522,7 @@ class ODMRRefocuser(LogicBase):
         nuclear.number_of_simultaneous_measurements = int(min(int(p['n_simultaneous']), len(mw_freq)))
         return nuclear
     
+    @staticmethod
     def _odmr_plot_defaults(pld):
         """Plot of the ODMR refocus: counts versus mw frequency, averaged over the sweeps."""
         pld.x_axis_parameter_list.update_selected_value('mw_freq')

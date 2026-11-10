@@ -164,7 +164,7 @@ def nuclear_settings(nuclear, ret_mcas, analyze_sequence, meas_code, pdc=None, *
         pdc = {}
     nuclear.reset_settings()
     if 'script_path' in kwargs:
-        nuclear.make_save_location_params(script_path=kwargs['script_path'], folder=r"C:/Users/Erik Hesselmeier/Desktop/NuclearOpsData", sub_folder_kw="UserScripts")
+        nuclear.make_save_location_params(script_path=kwargs['script_path'], folder=r"C:/Users/ehess/Desktop/Messungen/NuclearOpsData", sub_folder_kw="UserScripts")
     for key, val in pdc.items():
         if hasattr(val, '__iter__'):
             nuclear.file_name += "_{}{}".format(key, "_".join([str(i) for i in val]))
@@ -224,7 +224,7 @@ def create_nuclear(script_path):
     print(1)
     nuclear = qudi.logic.NuclearOPs.NuclearOPs()#TODO fill config here
     nuclear.make_save_location_params(script_path=script_path,
-                                      folder= r"C:/Users/Erik Hesselmeier/Desktop/NuclearOpsData",
+                                      folder= r"C:/Users/ehess/Desktop/Messungen/NuclearOpsData",
                                       sub_folder_kw="UserScripts")
     print(2)
     nuclear_name = "NuclearOPs{}_{}".format(nuclear.file_name, datetime.datetime.strftime(nuclear.date_of_creation, nuclear.__TITLE_DATE_FORMAT__))

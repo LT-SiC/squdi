@@ -1143,7 +1143,7 @@ class NuclearOPs(DataGeneration):
 
     def add_odmr_script_to_queue(self, abort, pd):
         print("calling add_odmr_script_to_queue")
-        sys.modules[self.queue.init_task(name='refocus_confocal_odmr', folder='C:/src/qudi/notebooks')].run_fun(
+        sys.modules[self.queue.init_task(name='refocus_confocal_odmr', folder=self.queue.notebook_folder)].run_fun(
             self, abort=abort, **pd)
 
     # def do_refocusodmr_gui(self, abort=None, check_odmr_frequency_drift_ok=True, initial_odmr=False):
@@ -1408,7 +1408,6 @@ class NuclearOPs(DataGeneration):
             self.analyze(ana_trace=ana_trace, start_idx=idx)
 
     def save(self):
-        pass
         if len(self.iterator_df_done) > 0 and not(hasattr(self, 'do_save') and not self.do_save):
             Thread1= threading.Thread(target=super().save, kwargs={"notify": False})
             Thread1.start()

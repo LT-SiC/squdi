@@ -240,7 +240,7 @@ class ScanningOptimizeLogic(LogicBase):
     @scan_sequence.setter
     def scan_sequence(self, sequence):
         """
-        @param sequence: list of string tuples giving the scan order, eg. [('x','y'),('z')]
+        @param sequence: list of string tuples giving the scan order, eg. [('x','y'), 'z']
         """
         axs_flat = []
         list(axs_flat.extend(item) for item in sequence)
@@ -511,7 +511,6 @@ class ScanningOptimizeLogic(LogicBase):
                                     data.data[self._data_channel],
                                     max_is_spline=True,
                                 )
-                                print("Here I am...")
 
                     else:
                         x = np.linspace(*data.scan_range[0], data.scan_resolution[0])
@@ -676,7 +675,7 @@ class OptimizerScanSequence:
     @sequence.setter
     def sequence(self, sequence):
         """
-        @param sequence: list of tuples, eg. [('x','y'), ('z')]
+        @param sequence: list of tuples, eg. [('x','y'), 'z']
         """
         if not sequence in self._available_opt_seqs_raw():
             raise ValueError(

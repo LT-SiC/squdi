@@ -37,8 +37,6 @@ from qudi.core.connector import Connector
 from qudi.core.configoption import ConfigOption
 import shutil
 
-import lmfit
-
 from natsort import natsorted
 import math
 
@@ -51,6 +49,10 @@ import math
 QUDI_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_ROOT = os.environ.get('QUDI_LOG_DIR', os.path.join(QUDI_DIR, 'log'))
 TT_LOG_DIR = os.path.join(LOG_ROOT, 'transition_tracker_log')
+
+print(QUDI_DIR)
+print(LOG_ROOT)
+print(TT_LOG_DIR)
 
 app_dir = QUDI_DIR
 log_dir = LOG_ROOT + os.sep
@@ -1543,7 +1545,7 @@ class TransitionTracker(LogicBase):
 
                 shutil.copy(os.path.join(folder,original),os.path.join(folder,copy))
         
-        script_folder=r"C:\Users\Erik Hesselmeier\Desktop\test_squdi\src\qudi\notebooks\UserScripts"
+        script_folder=r"C:\Users\ehess\OneDrive\Dokumente\Software\squdi\src\qudi\notebooks\UserScripts"
         shutil.copytree(os.path.join(script_folder,"29Si5"),os.path.join(script_folder,f"{str(spin_names).replace('.',',')}"[2:-2]))
         print("you need to restart qudi for the transition tracker to update")
 
