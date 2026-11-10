@@ -358,7 +358,7 @@ class QueueLogic(LogicBase):
     def on_activate(self):
         # crucial modules
         self._awg                       = self.mcas_dict_holder()
-        self._transition_tracker        = self.transition_tracker()
+        self._tt                        = self.transition_tracker()
         self._gated_counter             = self.gated_counter()
 
         # optional modules
@@ -371,23 +371,6 @@ class QueueLogic(LogicBase):
         self._poimanagerlogic           = self._optional_module('poimanagerlogic')
         self._counter                   = self._optional_module('counterlogic1')
         
-        self.tt = self._transition_tracker # FIXME give the already correct name in lines 253. Maybe both names are used in other files
-        # self._odmr_refocuser = ODMRRefocuser(
-        #     self,
-        #     interval=self._odmr_refocus_interval,
-        #     ranges=self._odmr_refocus_ranges,
-        #     parameters=self._odmr_refocus_parameters,
-        #     min_contrast=self._odmr_refocus_min_contrast,
-        #     min_snr=self._odmr_refocus_min_snr,
-        #     pause_timeout=self._odmr_refocus_pause_timeout,
-        #     run_on_activation=self._odmr_refocus_on_activation,
-        #     plot=self._odmr_refocus_plot,
-        # )
-        # odmr should be run via NucOps refocus script
-        # data should be tracked and visualized via TT logic and gui
-        # create_odmr could then be used to keep a global tracking time 
-        # of odmr refocus. Such that it does not refocus before each measurement
-        # or after a fixed measurement time but globally once an hour.
         self.notebook_folder = QUDI_DIR + r'\notebooks'
         self.user_script_folder = self.notebook_folder + r'\UserScripts'
         self.init_run()
@@ -567,16 +550,6 @@ class QueueLogic(LogicBase):
             # CAREFUL WITH THREADING AND WRITING TO SAME HDF FILE self.save_values_hdf(classifier='memory_mb', vd=dict(none=self.current_memory_usage()))
             # possible solution: https://stackoverflow.com/questions/22522551/pandas-hdf5-as-a-database
             time.sleep(5)
-
-    # def current_memory_usage(self):
-    #     print(os.getpid())
-    #     p = psutil.Process(os.getpid())
-    #     return p.memory_info()[0] / 1024.
-    #
-    # def track_memory_usage_thread(self):
-    #     self.tmu_thread = threading.Thread(target=self.track_memory_usage)
-    #     self.tmu_thread.stop_request = multiprocess.Event()
-    #     self.tmu_thread.start()
 
     def script_queue_changed(self):
         self.update_script_queue_table_data()

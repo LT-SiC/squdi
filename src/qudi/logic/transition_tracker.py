@@ -238,18 +238,15 @@ class RPWrapper:
         #d = self.Phi_dict
         d = pd.DataFrame(list(self.Phi_dict.items()), columns=["amp", "phi"]).astype(float)
 
-        #print(d)
         amps = np.array(d['amp'])
         phis = np.array(d['phi'])
         order = np.argsort(amps)
-        #print(amps,phis)
         return np.interp(self.amp, amps[order], phis[order])
 
     
     def get_corrected_pi(self):
         phi_corr = self._get_phi_for_amp()
         #freq=self._get_freq_for_amp()
-        #print("corrected phi:",phi_corr,self.amp)
         omega = self.rp.omega
         target=np.pi
         return (target-phi_corr)/(omega*2*np.pi)
@@ -358,15 +355,12 @@ class RabiParametersStatic:
         self.tnf = len([i for i in list(fd[0]) if 'amp' in i])
         ecn = self.file_header(self.tnf,add_phi=True)
         cn = list(fd[0])
-        #print("-------------------------")
-        #print(fd,ecn,cn,sep="\n")
         if cn != ecn:
             ecn = self.file_header(self.tnf,add_phi=False)
             if cn != ecn:
                 raise Exception('File column names not allowed. expected {}, found{}'.format(ecn, cn))
             
         df=pd.DataFrame(data=fd[1:, :], columns=fd[0, :])
-        #print(fd,ecn,cn,sep="\n")
         self.df=df
         if "phi" in df.columns:
             #print("new phi")
@@ -376,7 +370,6 @@ class RabiParametersStatic:
             self.phi_dict={row["amp0"]:0 for i,row in df.iterrows()} #You should not use any function with "iter" in its name for more than a few thousand rows or you will have to get used to a lot of waiting.
             self.phi=0
 
-        #print("DF_______________",df)
         return df
 
     def set_data_array(self):
@@ -514,7 +507,10 @@ class RabiParametersStatic:
             fig, ax = plt.subplots(1, 2)
             ax0 = ax[0]
             ax1 = ax[1]
-            fig.canvas.set_window_title(self.transition_name)
+            manager = getattr(fig.canvas, 'manager', None)
+            set_window_title = getattr(manager, 'set_window_title', None)
+            if callable(set_window_title):
+                set_window_title(self.transition_name)
             fig.suptitle(self.filename)
         elif len(kwargs) == 2:
             ax0 = kwargs['ax0']
@@ -604,10 +600,17 @@ class Transition:
         self.set_meta()
     
     name = misc.ret_property_typecheck('name', str)
-    ms_state = misc.ret_property_list_element('ms_state', [1.5, 0.5,-0.5, -1.5]) # FIXME how to get the _spin_number from TransitionTracker here?
-    print("ms state in Transition:\n", ms_state)
     spin_type = misc.ret_property_list_element('spin_type', ['14n', '13c','29si'])
     current_frequency = misc.ret_property_typecheck('current_frequency', Number)
+
+    @property
+    def ms_state(self):
+        return self._ms_state
+
+    @ms_state.setter
+    def ms_state(self, value):
+        allowed_states = np.arange(-self.parent._spin_number, self.parent._spin_number + 1, 1)
+        self._ms_state = misc.check_list_element(value, 'ms_state', allowed_states)
 
     @property
     def start_level(self):
@@ -628,7 +631,7 @@ class Transition:
         name = TransitionTracker.correct_transition_name(self.name)
         self.nuc, ms = name.split(' ')
         self.ms_state = float(ms[2:])
-        self.spin_type = '14n' if '14n' in self.nuc else '13c' #Fixme should be 29si?
+        self.spin_type = '14n' if '14n' in self.nuc else '13c' # FIXME should be 29si, how to properly handle di-atomic bath?
         if self.spin_type == '14n':
             self.start_angular_momentum, self.end_angular_momentum = sorted([0, int(self.nuc[-2:])])
         else:
@@ -1159,6 +1162,7 @@ class TauOptimizer: #for DDRF tau
             self.dd_data = data
 
             # x/2 because DDRF uses a different tau definition than DD
+            # TODO DD and DDRF should both use 2tau between pi pulses.
             tau_vals = data.iloc[:, 0].values/2
             y1_vals  = data.iloc[:, 1].values
             y2_vals  = data.iloc[:, 2].values
@@ -1418,7 +1422,6 @@ class TauOptimizer: #for DDRF tau
 
 
 class TransitionTracker(LogicBase):
-    #_hist = ConfigOption('hist', {'click_channel': 1, 'start_channel': 5, 'binwidth': 1000, 'number_of_bins': 1000})
     _spin_number = ConfigOption('spin_number', 1.5)
     _current_spins = ConfigOption('current_spins', default = '')
     _e_gate_dur = ConfigOption('e_gate_dur', default = 0.128)
@@ -1454,11 +1457,12 @@ class TransitionTracker(LogicBase):
         self._ple_logic= self._optional_module('ple_logic')
         self._powerstabilization_logic= self._optional_module('powerstabilization_logic')
 
-        self.g_factors = gamma # import from NVHam
-        self.connect_signals()  # todo
+        self.g_factors = gamma
+        self.connect_signals()
         self.register=Register()
         self.couplings=Couplings()
         self.reload_nuclear_parameters()
+        self.zero_field_splitting = get_last_value_from_file('zfs')
         self.mw_mixing_frequency_L = get_last_value_from_file('mw_mixing_frequency_L')
         self.mw_mixing_frequency_C = get_last_value_from_file('mw_mixing_frequency_C')
         self.mw_mixing_frequency_R = get_last_value_from_file('mw_mixing_frequency_R')
@@ -1472,7 +1476,6 @@ class TransitionTracker(LogicBase):
 
         # self.xyz = pi3d.get_last_values_from_file('xyz')
         self.current_local_oscillator_freq = 0. # get_last_value_from_file('current_local_oscillator_freq') #also not using it.
-        self.zero_field_splitting = get_last_value_from_file('zfs')
         self.e_transitions = np.arange(-1*self._spin_number,self._spin_number+1,1)
         self.e_transitions = [str(spin_state) if spin_state < 0 else "+" + str(spin_state) for spin_state in self.e_transitions]
         self.transition_name_list = [self.e_transitions] + [['+0.5', '-0.5']] * (len(self.c13_list)+len(self.si29_list))
@@ -1806,7 +1809,7 @@ class TransitionTracker(LogicBase):
                 Transition(
                     parent=self,
                     name=key,
-                    current_frequency=-get_transition_frequency(h_diag=self.h_diag, dims=self.nvham.dims, transition=val) # fixme get it right
+                    current_frequency=-get_transition_frequency(h_diag=self.h_diag, dims=self.nvham.dims, transition=val) # FIXME why is the negative sign needed?
                 )
             )
 
@@ -1887,8 +1890,6 @@ class TransitionTracker(LogicBase):
 
     @mw_mixing_frequency_L.setter
     def mw_mixing_frequency_L(self, val):
-        #print("TT:")
-        #print(val)
         self._mw_mixing_frequency_L = misc.check_type(val, '_mw_mixing_frequency_L', Number)
         if getattr(self, '_mw_mixing_frequency_L', 0.0) != 0.0:
             save_value_to_file(self.mw_mixing_frequency_L, 'mw_mixing_frequency_L')
@@ -1901,6 +1902,8 @@ class TransitionTracker(LogicBase):
     @zero_field_splitting.setter
     def zero_field_splitting(self, val):
         self._zero_field_splitting = misc.check_type(val, 'zero_field_splitting', Number)
+        if getattr(self, '_zero_field_splitting', 0.0) != 0.0:
+            save_value_to_file(self.zero_field_splitting, 'zero_field_splitting')
         self.update_stuff()
 
     @property
@@ -1934,28 +1937,13 @@ class TransitionTracker(LogicBase):
         angle = np.arctan(
             np.rad2deg(self.current_magnetic_field_vector[1]/self.current_magnetic_field_vector[0]))
 
-    @property
-    def mw_transition_frequency_p1(self):
-        return self.current_local_oscillator_freq_p1 + self.mw_mixing_frequency_R #TODO local oscillator_p1 to local oscillator_R
-
-    @property
-    def current_local_oscillator_freq_p1(self):
-        return self.current_local_oscillator_freq# + self.mw_mixing_frequency
-
-
-
-
-    # @property
-    # def mw_mixing_frequency_p1(self):
-    #     return 2*self.zero_field_splitting - self.mw_mixing_frequency
-
     # @property
     # def mw_transition_frequency_p1(self):
-    #     return self.current_local_oscillator_freq + self.mw_mixing_frequency_p1
-    #
+    #     return self.current_local_oscillator_freq_p1 + self.mw_mixing_frequency_R #TODO local oscillator_p1 to local oscillator_R
+
     # @property
     # def current_local_oscillator_freq_p1(self):
-    #     return self.mw_transition_frequency_p1 + self.mw_mixing_frequency
+    #     return self.current_local_oscillator_freq# + self.mw_mixing_frequency
 
     def update_stuff(self,PLE_only=False):
         print("updating stuff")
@@ -2222,14 +2210,14 @@ class TransitionTracker(LogicBase):
     #     else:
     #         print("Not Possible. Frequency difference is larger than {} MHz.".format(max_dif))
 
-    def update_zero_field_splitting(self, freq):
-        """
-        updates the zero_field_splitting considering current_local_oscillator_freq, mw_mixing_frequency
-        :param freq: float
-            local oscillator frequency ms 0 -> +1 for mixing frequency mw_mixing_frequency
-        """
-        self.zero_field_splitting = (self.mw_mixing_frequency_R-self.mw_mixing_frequency_L)/2
-        #self.zero_field_splitting = (freq - self.current_local_oscillator_freq) / 2.0 + self.mw_mixing_frequency_L
+    # def update_zero_field_splitting(self, freq):
+    #     """
+    #     updates the zero_field_splitting considering current_local_oscillator_freq, mw_mixing_frequency
+    #     :param freq: float
+    #         local oscillator frequency ms 0 -> +1 for mixing frequency mw_mixing_frequency
+    #     """
+    #     self.zero_field_splitting = (self.mw_mixing_frequency_R-self.mw_mixing_frequency_L)/2
+    #     #self.zero_field_splitting = (freq - self.current_local_oscillator_freq) / 2.0 + self.mw_mixing_frequency_L
 
     def get_rabi_parameter(self, name, **kwargs):
         name = self.correct_transition_name(name)
@@ -2247,7 +2235,7 @@ class TransitionTracker(LogicBase):
         else:
             tni = None
         if 'e_rabi' in name and not '_ou' in name:
-            name = "{}_ou{:.0f}deg{}".format(name, 1000*self._awg.mcas_dict.awgs['2g'].ch[1].output_amplitude, #TODO connect to it
+            name = "{}_ou{:.0f}deg{}".format(name, 1000*self._awg.mcas_dict.awgs['2g'].ch[1].output_amplitude,
                                              kwargs['mixer_deg'])
             del kwargs['mixer_deg']
         return RabiParametersSingle(rp=self.rabi_parameters[name], tni=tni, **kwargs)
@@ -2278,8 +2266,7 @@ class TransitionTracker(LogicBase):
         f2 = self.mw_mixing_frequency_C
         f3 = self.mw_mixing_frequency_R
         def H(B_z, B_x):
-            print("TT: Hardcoded ZFS")
-            D = 34.9 #MHz 
+            D = self.zero_field_splitting
             gamma_e = self.g_factors['e']
             return D * sz ** 2 + gamma_e * B_z * sz + gamma_e * B_x * sx
 
@@ -2304,6 +2291,7 @@ class TransitionTracker(LogicBase):
 
     def mfl(self, td, mw_mixing_frequency_L=None, ms_trans='L'):
         #TODO: update ms from NV to V2
+        # TODO add the possibility to add the hyperfine of 29Si and 13C to the mfl calculation
         """
 
         :param td: dict
@@ -2313,7 +2301,7 @@ class TransitionTracker(LogicBase):
             e.g. [17.6750, 19.8350]
 
         """
-        if mw_mixing_frequency_L is None: mwfm = self.mw_mixing_frequency_L
+        if mw_mixing_frequency_L is None: mwfm = self.mw_mixing_frequency_L #whats mwfm?
 
         if type(td) is str:
             td = td.replace('14n', '14N').replace('13c', '13C').replace('29si','29Si')

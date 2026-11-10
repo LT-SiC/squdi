@@ -77,8 +77,8 @@ class QueueGui(GuiBase):
     def on_deactivate(self):
         self._mw.close()
 
-    def manuel_pause(self,value):
-        print("Manuel pause:",value)
+    def manual_pause(self,value):
+        print("Manual pause:",value)
         if hasattr(self._queue_logic,"cun"):
             self._queue_logic.cun.manual_pause=value
 
@@ -166,7 +166,7 @@ class QueueGui(GuiBase):
 
     # ---- UI callbacks ----
     def select_folder(self):
-        d = QtWidgets.QFileDialog.getExistingDirectory(self._win, "Select Folder", QUDI_DIR + "/notebooks/UserScripts")#str(Path.cwd())
+        d = QtWidgets.QFileDialog.getExistingDirectory(self._win, "Select Folder", self.scripts_folder)
         if d:
             self.folder_line.setText(d)
             self.refresh_py_list()

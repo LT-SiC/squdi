@@ -508,14 +508,14 @@ class NuclearOPs(DataGeneration):
                     
                     if self.raw_clicks_processing:
                         self.data.set_observations(pd.concat([self.df_refocus_pos.iloc[-1:, :]]*self.number_of_simultaneous_measurements).reset_index(drop=True))
-                        self.data.set_observations([OrderedDict(ple_A1=self.queue._transition_tracker.ple_A1)]*self.number_of_simultaneous_measurements)
-                        self.data.set_observations([OrderedDict(ple_A2=self.queue._transition_tracker.ple_A2)]*self.number_of_simultaneous_measurements)
+                        self.data.set_observations([OrderedDict(ple_A1=self.queue._tt.ple_A1)]*self.number_of_simultaneous_measurements)
+                        self.data.set_observations([OrderedDict(ple_A2=self.queue._tt.ple_A2)]*self.number_of_simultaneous_measurements)
                     #elif not self.save_smartly: # we anyway doint it.
-                    self.data.set_observations([OrderedDict(mw_mixing_frequency=self.queue._transition_tracker.mw_mixing_frequency_L)]*self.number_of_simultaneous_measurements)#TODO rename mw_freq
-                    self.data.set_observations([OrderedDict(mw_mixing_frequency=self.queue._transition_tracker.mw_mixing_frequency_R)]*self.number_of_simultaneous_measurements)
-                    self.data.set_observations([OrderedDict(local_oscillator_freq=self.queue._transition_tracker.current_local_oscillator_freq)]*self.number_of_simultaneous_measurements)
-                    self.data.set_observations([OrderedDict(ple_A2=self.queue._transition_tracker.ple_A2)]*self.number_of_simultaneous_measurements) # already inlcuded in raw_clicks_processing
-                    self.data.set_observations([OrderedDict(ple_A1=self.queue._transition_tracker.ple_A1)]*self.number_of_simultaneous_measurements) # already inlcuded in raw_clicks_processing
+                    self.data.set_observations([OrderedDict(mw_mixing_frequency=self.queue._tt.mw_mixing_frequency_L)]*self.number_of_simultaneous_measurements)#TODO rename mw_freq
+                    self.data.set_observations([OrderedDict(mw_mixing_frequency=self.queue._tt.mw_mixing_frequency_R)]*self.number_of_simultaneous_measurements)
+                    self.data.set_observations([OrderedDict(local_oscillator_freq=self.queue._tt.current_local_oscillator_freq)]*self.number_of_simultaneous_measurements)
+                    self.data.set_observations([OrderedDict(ple_A2=self.queue._tt.ple_A2)]*self.number_of_simultaneous_measurements) # already inlcuded in raw_clicks_processing
+                    self.data.set_observations([OrderedDict(ple_A1=self.queue._tt.ple_A1)]*self.number_of_simultaneous_measurements) # already inlcuded in raw_clicks_processing
                     self.data.set_observations(pd.concat([self.df_refocus_pos.iloc[-1:, :]]*self.number_of_simultaneous_measurements).reset_index(drop=True))#already inlcuded in raw_clicks_processing
                     
                     self.data.set_observations([OrderedDict(start_time=datetime.datetime.now())]*self.number_of_simultaneous_measurements)
@@ -1175,9 +1175,9 @@ class NuclearOPs(DataGeneration):
     #                 _sleep_ms(500)
 
     #         elif self.refocus_pulsed_odmr:
-    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StartFreq_LineEdit_textEdited(str(self.queue._transition_tracker.mw_mixing_frequency_L-5))
-    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StopFreq_LineEdit_textEdited(str(self.queue._transition_tracker.mw_mixing_frequency_L+5))
-    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_MW2_Freq_LineEdit_textEdited(str(self.queue._transition_tracker.mw_mixing_frequency_R))
+    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StartFreq_LineEdit_textEdited(str(self.queue._tt.mw_mixing_frequency_L-5))
+    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StopFreq_LineEdit_textEdited(str(self.queue._tt.mw_mixing_frequency_L+5))
+    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_MW2_Freq_LineEdit_textEdited(str(self.queue._tt.mw_mixing_frequency_R))
     #             # self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StartFreq_LineEdit_textEdited(str(2394))
     #             # self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StopFreq_LineEdit_textEdited(str(2405))
     #             # self.queue._ODMR_logic.pulsedODMRLogic.pulsed_MW2_Freq_LineEdit_textEdited(str(2539))
@@ -1188,9 +1188,9 @@ class NuclearOPs(DataGeneration):
     #             while self.queue._ODMR_logic.pulsedODMRLogic.pulsed_odmr_refocus_running:
     #                 _sleep_ms(500)
     #             print("TRYING TO WRITE START FREQ")
-    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StartFreq_LineEdit_textEdited(str(self.queue._transition_tracker.mw_mixing_frequency_R-5))
-    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StopFreq_LineEdit_textEdited(str(self.queue._transition_tracker.mw_mixing_frequency_R+5))
-    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_MW2_Freq_LineEdit_textEdited(str(self.queue._transition_tracker.mw_mixing_frequency_L))
+    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StartFreq_LineEdit_textEdited(str(self.queue._tt.mw_mixing_frequency_R-5))
+    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StopFreq_LineEdit_textEdited(str(self.queue._tt.mw_mixing_frequency_R+5))
+    #             self.queue._ODMR_logic.pulsedODMRLogic.pulsed_MW2_Freq_LineEdit_textEdited(str(self.queue._tt.mw_mixing_frequency_L))
     #             # self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StartFreq_LineEdit_textEdited(str(2534))
     #             # self.queue._ODMR_logic.pulsedODMRLogic.pulsed_StopFreq_LineEdit_textEdited(str(2545))
     #             # self.queue._ODMR_logic.pulsedODMRLogic.pulsed_MW2_Freq_LineEdit_textEdited(str(2400))
