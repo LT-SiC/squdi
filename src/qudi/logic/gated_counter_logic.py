@@ -286,8 +286,8 @@ class GatedCounter(LogicBase):
         self.raw_clicks_processing_channels = raw_clicks_processing_channels
         number_of_subtraces = 1 #FIXME, later put a len of analyze sequence
         
-        if hasattr(self, '_gui'):
-            self.clear_plot_signal.emit(number_of_subtraces)
+        # if hasattr(self, '_gui'):
+        #     self.clear_plot_signal.emit(number_of_subtraces)
         try:
             self.set_counter()
             if not self._mcas_dict.mcas_dict.debug_mode:
@@ -403,10 +403,10 @@ class GatedCounter(LogicBase):
         else:
             self.progress = int(len(self.gated_counter_data) - np.argmax(self.gated_counter_data[::-1] != 0) - 1)
 
-    def init_plot(self):
-        if hasattr(self, '_gui'):
-            #self.gui.init_plot()
-            pass
+    # def init_plot(self):
+    #     if hasattr(self, '_gui'):
+    #         #self.gui.init_plot()
+    #         pass
 
     def update_plot_data(self):
         self.effective_subtrace_list = []
@@ -433,7 +433,9 @@ class GatedCounter(LogicBase):
         if hasattr(self, '_gui'):
             self.update_plot_data()
             self.sigTraceUpdated.emit(self.effective_subtrace_list, self.hist_list)
-
+        else:
+            print("gated counter logic has no attribute '_gui'")
+            print("Is 'update_plot' needed at all?")
     def clear_plot(self, number_of_subtraces):
         self.clear_plot_signal.emit(number_of_subtraces)
 
@@ -461,23 +463,23 @@ class GatedCounterQt(qudi.logic.qudip_enhanced.qtgui.gui_helpers.QtGuiClass):
     def clear_signal_emitted(self):
         pass
 
-    def init_gui(self):
-        super(GatedCounterQt, self).init_gui()
-        for name in [
-            'clear_plot',
-            'update_plot',
-        ]:
-            getattr(getattr(self, "{}_signal".format(name)), 'connect')(getattr(self, "{}_signal_emitted".format(name)))
+    # def init_gui(self):
+    #     super(GatedCounterQt, self).init_gui()
+    #     for name in [
+    #         'clear_plot',
+    #         'update_plot',
+    #     ]:
+    #         getattr(getattr(self, "{}_signal".format(name)), 'connect')(getattr(self, "{}_signal_emitted".format(name)))
 
-        # Figure
-        self.fig = Figure()
-        self.canvas = FigureCanvas(self.fig)
-        self.toolbar = NavigationToolbar(self.canvas, self)
+    #     # Figure
+    #     self.fig = Figure()
+    #     self.canvas = FigureCanvas(self.fig)
+    #     self.toolbar = NavigationToolbar(self.canvas, self)
 
-        self.ax = self.fig.add_subplot(111)
-        self.canvas.draw()
-        self.plot_layout.addWidget(self.canvas, 1, 1, 20, 20)
-        self.toolbar_layout.addWidget(self.toolbar, 21, 1, 1, 20)
+    #     self.ax = self.fig.add_subplot(111)
+    #     self.canvas.draw()
+    #     self.plot_layout.addWidget(self.canvas, 1, 1, 20, 20)
+    #     self.toolbar_layout.addWidget(self.toolbar, 21, 1, 1, 20)
 
     def update_plot(self, effective_subtrace_list, hist_list):
         self.update_plot_signal.emit(effective_subtrace_list, hist_list)

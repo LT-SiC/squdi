@@ -26,12 +26,10 @@ import os
 import pyqtgraph as pg
 
 from qudi.core.connector import Connector
-from qudi.util import units
 from qudi.core.module import GuiBase
 from qudi.util.colordefs import QudiPalettePale as palette
-from qudi.util.colordefs import QudiPalette as palettedark
-from PySide2 import QtCore
-from PySide2 import QtWidgets
+from PySide6 import QtCore
+from PySide6 import QtWidgets
 import qudi.util.uic as uic
 
 
@@ -54,8 +52,6 @@ class GatedCounterGui(GuiBase):
 
     # declare connectors
     gatedcounterlogic1 = Connector(interface='GatedCounter')
-    #traceanalysislogic1 = Connector(interface='TraceAnalysisLogic')
-
 
     sigStartGatedCounter = QtCore.Signal()
     sigStopGatedCounter = QtCore.Signal()
@@ -82,9 +78,7 @@ class GatedCounterGui(GuiBase):
         """
 
         self._counter_logic = self.gatedcounterlogic1()
-        self._counter_logic._gui = 'gui'
-        #self._trace_analysis = self.traceanalysislogic1()
-
+        
         self._mw = GatedCounterMainWindow()
         self._mw.centralwidget.hide()
         self._mw.setDockNestingEnabled(True)
@@ -344,8 +338,6 @@ class GatedCounterGui(GuiBase):
 
     def update_plot_signal_emitted(self, effective_subtrace_list, hist_list):
         try:
-            import time
-            t0 = time.time()
             for nst, st in enumerate(effective_subtrace_list):
                 self.update_trace(nst,st.flatten())
                 if len(hist_list[nst]) > 0:
