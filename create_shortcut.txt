@@ -1,0 +1,8 @@
+1. Desktop --> New --> Shortcut (Verknüpfung)
+2. Enter:
+	%windir%\System32\cmd.exe /K "CALL C:\Users\YourUsername\anaconda3\Scripts\activate.bat squdi && qudi"
+3. Then give a Name, e.g.:
+	Squdi
+4. Rightclick the generated icon --> Properties --> Change Icon
+	navigate to "C:\Users\ehess\miniconda3\envs\squdi\Lib\site-packages\qudi\artwork\logo"
+	and select the qudi logo.
