@@ -669,6 +669,14 @@ class ScanConstraints:
         self._backscan_configurable = bool(backscan_configurable)
         self._has_position_feedback = bool(has_position_feedback)
         self._square_px_only = bool(square_px_only)
+    #     self._channel_names = [ax.name for ax in axes]
+    #     print("init")
+    #     print(self._channel_names)
+    #     print(self._channels)
+
+    # @property
+    # def channel_names(self):
+    #     return self._channel_names.copy()
 
     @property
     def axes(self):
@@ -689,7 +697,6 @@ class ScanConstraints:
     @property
     def square_px_only(self):  # TODO Incorporate in gui/logic toolchain?
         return self._square_px_only
-
 
     @property
     def allow_coordinate_transform(self):

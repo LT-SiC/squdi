@@ -66,6 +66,7 @@ from qudi.core.configoption import ConfigOption
 from qudi.core.connector import Connector
 from qudi.interface.scanning_probe_interface import (ScanningProbeInterface, ScanConstraints, ScannerAxis,
                                                      ScannerChannel, ScanData, CoordinateTransformMixin)
+from PySide6 import QtCore
 
 DEFAULT_UNITS = {'x': 'm', 'y': 'm', 'z': 'm', 'a': 'V'}
 
@@ -87,6 +88,8 @@ class _TimeTaggerScanningProbeInterfuseBase(ScanningProbeInterface):
     _initial_backwards_line_resolution = ConfigOption(name='backwards_line_resolution', default=50, missing='nothing')
     _ramp_time_full_range = ConfigOption(name='ramp_time_full_range', default=0.1, missing='nothing')
     _timeout_margin = ConfigOption(name='timeout_margin', default=5.0, missing='nothing')
+
+    sigChangeTemperatureRegime = QtCore.Signal(bool)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -113,6 +116,12 @@ class _TimeTaggerScanningProbeInterfuseBase(ScanningProbeInterface):
         self._backwards_line_resolution = int(self._initial_backwards_line_resolution)
         constraints = self._ao.get_constraints()
         self._voltage_ranges = dict(constraints.voltage_ranges)
+
+        # FIXME: Does this line already run the set_temperature_regime?
+        # If not, soltage_ranges have to be set on activation
+        self.sigChangeTemperatureRegime.connect(self._ao.set_temperature_regime)
+
+        # FIXME: For now just take the RT parameters.
 
         unknown = [ax for ax in self._position_ranges if ax not in constraints.channel_names]
         if unknown:
@@ -145,6 +154,7 @@ class _TimeTaggerScanningProbeInterfuseBase(ScanningProbeInterface):
 
     def on_deactivate(self):
         self._stop_scan_thread()
+        self.sigChangeTemperatureRegime.disconnect(self.set_temperature_regime)
         with self._state_lock:
             if self.module_state() == 'locked':
                 self.module_state.unlock()

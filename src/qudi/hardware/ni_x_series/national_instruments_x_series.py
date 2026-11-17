@@ -96,8 +96,10 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
     _scanner_ao_channels = ConfigOption('scanner_ao_channels', missing='error')
     _scanner_ai_channels = ConfigOption('scanner_ai_channels', list(), missing='info')
     _scanner_counter_channels = ConfigOption('scanner_counter_channels', list(), missing='warn')
-    _scanner_voltage_ranges = ConfigOption('scanner_voltage_ranges', missing='error')
-    _scanner_position_ranges = ConfigOption('scanner_position_ranges', missing='error')
+    _scanner_voltage_ranges_lt = ConfigOption('scanner_voltage_ranges_lt', missing='error')
+    _scanner_voltage_ranges_rt = ConfigOption('scanner_voltage_ranges_rt', missing='error')
+    _scanner_position_ranges_lt = ConfigOption('scanner_position_ranges_lt', missing='error')
+    _scanner_position_ranges_rt = ConfigOption('scanner_position_ranges_rt', missing='error')
     _counter_voltage_range = ConfigOption('counter_voltage_range', [-10, 10], missing='info')   # of the analog inputs
     _max_counts = ConfigOption('max_counts', default=3e7)
     _RWTimeout = ConfigOption('read_write_timeout', default=10)
@@ -121,10 +123,9 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
     _output_pixel_clock = ConfigOption('output_pixel_clock', False, missing='nothing')
     _initial_position = ConfigOption('initial_position', None, missing='nothing')           # {'x': .., 'y': ..} or None
     # optional voltage / position ranges that are switched with change_temperature_regime
-    _scanner_voltage_ranges_lt = ConfigOption('scanner_voltage_ranges_lt', None, missing='nothing')
-    _scanner_voltage_ranges_rt = ConfigOption('scanner_voltage_ranges_rt', None, missing='nothing')
     _scanner_position_ranges_lt = ConfigOption('scanner_position_ranges_lt', None, missing='nothing')
     _scanner_position_ranges_rt = ConfigOption('scanner_position_ranges_rt', None, missing='nothing')
+    _is_lt = ConfigOption('is_lt', None, missing='nothing')
 
     # options of the legacy module (slow counter, ODMR, gated counter) that are accepted and ignored
     for _legacy_name in ('clock_channel', 'default_clock_frequency', 'counter_channels', 'counter_ai_channels',
@@ -134,7 +135,7 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
     del _legacy_name
 
     sigLimitsChanged = QtCore.Signal()
-    sigChangeTemperatureRegime = QtCore.Signal(bool)
+    # sigChangeTemperatureRegime = QtCore.Signal(bool)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -168,6 +169,12 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
     # qudi module
     # ----------------------------------------------------------------------------------------------------------
     def on_activate(self):
+        if self._is_lt:
+            self._voltage_ranges = self._scanner_voltage_ranges_lt # FIXME: How to decide on lt or 
+            self._position_ranges = self._scanner_position_ranges_lt
+        else:
+            self._voltage_ranges = self._scanner_voltage_ranges_rt # FIXME: How to decide on lt or 
+            self._position_ranges = self._scanner_position_ranges_rt
         self._photon_sources = self._photon_sources if self._photon_sources is not None else list()
         self._scanner_counter_channels = self._scanner_counter_channels or list()
         self._scanner_ai_channels = self._scanner_ai_channels or list()
@@ -180,8 +187,8 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
             'y': _number(self._scaling_correction_y),
         }
         self._scanner_ao_channels = list(self._scanner_ao_channels)
-        self._position_ranges = [list(r) for r in self._scanner_position_ranges]
-        self._voltage_ranges = [list(r) for r in self._scanner_voltage_ranges]
+        self._position_ranges = [list(r) for r in self._position_ranges]
+        self._voltage_ranges = [list(r) for r in self._voltage_ranges]
         if len(self._scanner_ao_channels) > len(self._voltage_ranges):
             raise ValueError('Specify at least as many scanner_voltage_ranges as scanner_ao_channels!')
         if len(self._scanner_ao_channels) > len(self._position_ranges):
@@ -198,7 +205,7 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
             [self._axes[name].clip_value(float(initial.get(name, 0.0))) for name in self._axes])
         self._target_position = self._current_position.copy()
 
-        self.sigChangeTemperatureRegime.connect(self.set_temperature_regime)
+        # 'self.sigChangeTemperatureRegime.connect(self.set_temperature_regime)' # Now in interfuse
         # The analog output is always needed and does not interfere with the rest: start it and leave it running.
         # (Like in the legacy module nothing is written at activation, the first move sets the outputs.)
         if self._start_analog_output() < 0:
@@ -392,6 +399,7 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
         return float(value)
 
     def set_temperature_regime(self, is_lt: bool) -> None:
+        print("IN setting temperatuer regime")
         """Switch to the configured LT or RT ranges (scanner_*_ranges_lt / _rt). The axes of the GUI and the logic
         are read at their activation, they have to be reactivated to see the new ranges."""
         volt = self._scanner_voltage_ranges_lt if is_lt else self._scanner_voltage_ranges_rt
@@ -411,6 +419,8 @@ class _NationalInstrumentsXSeriesBase(ScanningProbeInterface):
         self._target_position = self._current_position.copy()
         self._start_analog_output()           # reloads the voltage limits
         self.sigLimitsChanged.emit()
+
+        # TODO: update the self._constraints
 
     # ----------------------------------------------------------------------------------------------------------
     # analog output

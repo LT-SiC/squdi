@@ -1,19 +1,6 @@
 from os.path import join, getsize, isfile
-import numpy as np
-from TimeTagger import (
-    createTimeTagger,
-    createTimeTaggerNetwork,
-    AccessMode,
-    Dump,
-    Correlation,
-    Histogram,
-    Counter,
-    CountBetweenMarkers,
-    FileWriter,
-    Countrate,
-    Combiner,
-    TimeDifferences,
-)
+from Swabian import TimeTagger
+
 from qudi.core.configoption import ConfigOption
 from qudi.core.module import Base
 
@@ -31,6 +18,7 @@ class TT(Base):
     _remote_tagger_port = ConfigOption("remote_tagger_port", None, missing="info")
     _port = ConfigOption("port", 12233, missing="info")
     _remote_channel = ConfigOption("remote_tagger_port", None, missing="info")
+    _start_server = ConfigOption("start_server", bool, missing="info")
     set_conditional_filter = True
 
     """
@@ -75,14 +63,15 @@ class TT(Base):
         try:
             if self._remote_tagger_ip is not None:
                 print("Hello")
-                self.tagger = createTimeTaggerNetwork(f"{self._remote_tagger_ip}:{self._remote_tagger_port}")
+                self.tagger = TimeTagger.createTimeTaggerNetwork(f"{self._remote_tagger_ip}:{self._remote_tagger_port}")
                 print("Connected to remote tagger _ 2")
             else:
                 if self._serial is not None:
-                    self.tagger = createTimeTagger(self._serial)
+                    self.tagger = TimeTagger.createTimeTagger(self._serial)
                 else:
-                    self.tagger = createTimeTagger()
-                self.tagger.startServer(access_mode=AccessMode.Control, port=self._port)
+                    self.tagger = TimeTagger.createTimeTagger()
+                if self._start_server:
+                    self.tagger.startServer(access_mode=TimeTagger.AccessMode.Control, port=self._port)
                 self.log.info(f"Tagger initialization successful: {self.tagger.getSerial()}")
 
         except Exception as e:
@@ -98,6 +87,8 @@ class TT(Base):
                 self.delay_channel(delay=params["delay"], channel=channel)
             if "trigger_level" in params.keys():
                 self.tagger.setTriggerLevel(channel, params["trigger_level"])
+            if "DeadTime" in params.keys():
+                self.tagger.setDeadtime(channel,params['DeadTime'])
 
         # if self.set_conditional_filter:
         #     self.tagger.setConditionalFilter(trigger=self._hist["channels"],
@@ -120,7 +111,7 @@ class TT(Base):
         get data by hist.getData()
         """
 
-        return Histogram(self.tagger, kwargs["channel"], kwargs["trigger_channel"], kwargs["bin_width"], kwargs["number_of_bins"])
+        return TimeTagger.Histogram(self.tagger, kwargs["channel"], kwargs["trigger_channel"], kwargs["bin_width"], kwargs["number_of_bins"])
 
     # @remote_tagger
     def correlation(self, **kwargs):
@@ -134,7 +125,7 @@ class TT(Base):
         get data by corr.getData()
         """
 
-        return Correlation(self.tagger, kwargs["channel_start"], kwargs["channel_stop"], kwargs["bin_width"], kwargs["number_of_bins"])
+        return TimeTagger.Correlation(self.tagger, kwargs["channel_start"], kwargs["channel_stop"], kwargs["bin_width"], kwargs["number_of_bins"])
 
     # FIX!
     # @remote_tagger
@@ -144,7 +135,7 @@ class TT(Base):
     def dump(self, dumpPath, filtered_channels=None):
         if filtered_channels != None:
             self.tagger.setConditionalFilter(filtered=[filtered_channels], trigger=self.apdChans)
-        return Dump(self.tagger, dumpPath, self.maxDumps, self.allChans)
+        return TimeTagger.Dump(self.tagger, dumpPath, self.maxDumps, self.allChans)
 
     # @remote_tagger
     def countrate(self, channels=None):
@@ -154,7 +145,7 @@ class TT(Base):
         """
         if channels == None:
             channels = self._counter["channels"]
-        return Countrate(self.tagger, channels)
+        return TimeTagger.Countrate(self.tagger, channels)
 
     # @remote_tagger
     def counter(self, **kwargs):
@@ -162,16 +153,16 @@ class TT(Base):
         refresh_rate - number of samples per second:
 
         """
-        return Counter(self.tagger, kwargs["channels"], kwargs["bin_width"], kwargs["n_values"])
+        return TimeTagger.Counter(self.tagger, kwargs["channels"], kwargs["bin_width"], kwargs["n_values"])
 
     #!FIX
     # @remote_tagger
     def combiner(self, channels):
-        return Combiner(self.tagger, channels)
+        return TimeTagger.Combiner(self.tagger, channels)
 
     # @remote_tagger
     def count_between_markers(self, click_channel, begin_channel, end_channel, n_values):
-        return CountBetweenMarkers(self.tagger, click_channel, begin_channel, end_channel, n_values)
+        return TimeTagger.CountBetweenMarkers(self.tagger, click_channel, begin_channel, end_channel, n_values)
 
     # @remote_tagger
     def count_between_markers(self, click_channel, begin_channel, end_channel, n_values):
@@ -180,7 +171,7 @@ class TT(Base):
 
         if end_channel is not None:
             kwargs["end_channel"] = end_channel
-        return CountBetweenMarkers(self.tagger, **kwargs)
+        return TimeTagger.CountBetweenMarkers(self.tagger, **kwargs)
 
     def count_between_markers_nops(self, n_values=1):
         ## Adapted to work best with nuclear ops, might be rewritten with return statement, but takes time to see
@@ -191,7 +182,7 @@ class TT(Base):
         # TODO parse the channels from kwargs, otherwise if not present keep default.
         # something liek this.  cl_ch = getattr(kwargs['cl_ch'], self._click_channel)
         print("TAGGER: APD", self._count_between_markers["click_channel"])
-        self.gated_counter_countbetweenmarkers = CountBetweenMarkers(
+        self.gated_counter_countbetweenmarkers = TimeTagger.CountBetweenMarkers(
             self.tagger,
             click_channel=self._count_between_markers["click_channel"],
             begin_channel=self._count_between_markers["begin_channel"],
@@ -202,7 +193,7 @@ class TT(Base):
     # @remote_tagger
     def time_differences(self, click_channel, start_channel, next_channel, binwidth, n_bins, n_histograms):
 
-        return TimeDifferences(
+        return TimeTagger.TimeDifferences(
             self.tagger,
             click_channel=click_channel,
             start_channel=start_channel,
@@ -213,4 +204,4 @@ class TT(Base):
         )
 
     def write_into_file(self, filename, channels):
-        return FileWriter(self.tagger, filename, channels)
+        return TimeTagger.FileWriter(self.tagger, filename, channels)
