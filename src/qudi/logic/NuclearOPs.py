@@ -166,9 +166,6 @@ class NuclearOPs(DataGeneration):
                             zpl_counters.append(name)
 
                 if self.save_smartly:
-
-
-
                     # return zpl_counters + \
                     #        [
                     #            # 'trace',
@@ -188,14 +185,13 @@ class NuclearOPs(DataGeneration):
                     return ['result_{}'.format(i) for i in range(self.number_of_results)] + zpl_counters + \
                            ['trace',
                             'ple_A2', 'ple_A1',
-                            'average_counts', 'events', 'thresholds',
+                            'average_counts', 'events',
                             'start_time', 'end_time',
                             'mw_mixing_frequency', 'local_oscillator_freq',
                             'confocal_x', 'confocal_y', 'confocal_z',
                             'A2_Power',
                             #'aom_Ex_power_measured', 'aom_A1_power_measured', 'Ex_RO_power_measured', 'A2_Power',
-                            # 'EOM_Ex_integrator_voltage',
-                            'windows_ps', 'delays_ps']+yell
+                            ]+yell
 
                 if self.raw_clicks_processing:
                     if self.yellow_repump_compensation:
@@ -210,8 +206,7 @@ class NuclearOPs(DataGeneration):
                             'confocal_x', 'confocal_y', 'confocal_z',
                             # 'aom_Ex_power_measured', 'aom_A1_power_measured', 'Ex_RO_power_measured',
                             # 'EOM_Ex_integrator_voltage', 
-                            'A2_Power',
-                            'windows_ps', 'delays_ps']+yell
+                            'A2_Power']+yell
 
                 else:
                     if self.yellow_repump_compensation:
@@ -222,14 +217,12 @@ class NuclearOPs(DataGeneration):
                     return ['result_{}'.format(i) for i in range(self.number_of_results)] + zpl_counters + \
                            ['trace',
                             'ple_A2', 'ple_A1',
-                            'average_counts', 'events', 'thresholds',
+                            'average_counts', 'events',
                             'start_time', 'end_time',
                             'mw_mixing_frequency', 'local_oscillator_freq',
                             'confocal_x', 'confocal_y', 'confocal_z',
                             # 'aom_Ex_power_measured', 'aom_A1_power_measured', 'Ex_RO_power_measured',
-                            'A2_Power',
-                            # 'EOM_Ex_integrator_voltage',
-                            'windows_ps', 'delays_ps']+yell
+                            'A2_Power']+yell
         except Exception:
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
@@ -249,14 +242,11 @@ class NuclearOPs(DataGeneration):
 
 
                 # # TEMP SOLUTION FIXME LATER, Only for HOM , just uncomment this code
-                self._dtypes = dict(delays_ps='object',
-                                    windows_ps='object', 
-                                    trace='object',
+                self._dtypes = dict(trace='object',
                                     events='int', 
                                     start_time='datetime', 
                                     end_time='datetime',
                                     local_oscillator_freq='float', 
-                                    thresholds='object',
                                     confocal_x='float', 
                                     confocal_y='float', 
                                     confocal_z='float',
@@ -264,8 +254,7 @@ class NuclearOPs(DataGeneration):
 
 
             elif self.raw_clicks_processing:
-                self._dtypes = dict(delays_ps='object',windows_ps='object',
-                                    start_time='datetime', end_time='datetime',
+                self._dtypes = dict(start_time='datetime', end_time='datetime',
                                     events='int',
                                     confocal_x='float', confocal_y='float', confocal_z='float',
                                     average_counts='float')
@@ -273,14 +262,11 @@ class NuclearOPs(DataGeneration):
 
 
             else:
-                self._dtypes = dict(delays_ps='object',
-                                    windows_ps='object', 
-                                    trace='object',
+                self._dtypes = dict(trace='object',
                                     events='int', 
                                     start_time='datetime', 
                                     end_time='datetime',
                                     local_oscillator_freq='float', 
-                                    thresholds='object',
                                     confocal_x='float', 
                                     confocal_y='float', 
                                     confocal_z='float',
@@ -1381,8 +1367,7 @@ class NuclearOPs(DataGeneration):
                 obs_r = df.rename(columns={'result': 'result_0'}).drop(columns=['step', 'events', 'sm'])
             if not self.raw_clicks_processing: #Do not add result (for some reason, they are analyzed already anyway)
                 data.set_observations(obs_r, start_idx=start_idx)
-                #data.set_observations(df.groupby(['sm']).agg({'thresholds': lambda x: [i for i in x]}), start_idx=start_idx)
-
+                
             data.set_observations(df.groupby(['sm']).agg({'events': np.sum}), start_idx=start_idx)
             data.set_observations(df.groupby(['sm']).agg({'average_counts': np.mean}), start_idx=start_idx)
 

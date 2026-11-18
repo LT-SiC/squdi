@@ -348,6 +348,7 @@ class Data:
                 else:
                     if hasattr(self, attr_name):
                         delattr(self, attr_name)
+            df = self._hdf_read_array_columns(store._handle, df)
         else:
             df = store.get('/a')
         store.close()
@@ -431,11 +432,14 @@ class Data:
             print("csv data saved ({:.2f}s).\n If speed is an issue, use hdf."
                   " csv format is useful ony for py2-py3-compatibility.".format(time.time() - t0))
         elif filepath.endswith('.hdf'):
-            df_save=self.df.copy()
-            df_save
-            columns = df_save.columns
+            df_save = self.df.copy()
+            # 1-d numeric arrays per cell (e.g. 'trace') are NOT stringified any more: they go to an append-only,
+            # compressed array node. The column stays in '/df' as an empty placeholder, so column order is preserved.
+            array_cols = [c for c in df_save.columns if self._is_array_column(df_save[c])]
+            for c in array_cols:
+                df_save[c] = ''
             _cellwise = getattr(pd.DataFrame, 'map', None) or pd.DataFrame.applymap   # DataFrame.map needs pandas >= 2.1
-            df_save = _cellwise(df_save[columns], str)   # every cell as str; a new frame, so no dtype conflict with float columns
+            df_save = _cellwise(df_save, str)   # remaining cells (scalars) as str, exactly as before
             t0 = time.time()
             t = []
             if not self.hdf_lock.acquire(False):
@@ -443,21 +447,28 @@ class Data:
                 print('Waiting for hdf_lock..')
                 self.hdf_lock.acquire()
                 print('Ok.. hdf_lock acquired.')
+            try:
+                t.append(time.time() - t0)
+                store = pd.HDFStore(filepath)
+                try:
+                    store.put('df', df_save, format='table')
+                    for key in ["parameter_names", 'observation_names', 'dtypes']:
+                        setattr(store.get_storer('df').attrs, key, getattr(self, key))
+                    setattr(store.get_storer('df').attrs, "Datatypes", dict(self.df.dtypes))
+                    for c in array_cols:
+                        self._hdf_sync_array_column(store._handle, c)
+                finally:
+                    store.close()
+                t.append(time.time() - t0)
+            finally:
+                self.hdf_lock.release()
             t.append(time.time() - t0)
-            store = pd.HDFStore(filepath)
-            store.put('df', df_save, format='table') # format = "fixed" is faster, but not-appendable nor searchable
-            #store.get_storer('df').attrs.metadata = {"Datatypes":list(self.df.dtypes)}
-            for key in ["parameter_names", 'observation_names', 'dtypes']:
-                setattr(store.get_storer('df').attrs, key, getattr(self, key))
-            setattr(store.get_storer('df').attrs, "Datatypes", dict(self.df.dtypes))
-            store.close()
-            t.append(time.time() - t0)
-            self.hdf_lock.release()
-            t.append(time.time() - t0)
-            if getattr(self, 'save_dur_list', [0])[-1] < 5. or self.seconds_since_last_save(filepath) > 3600.:
+            # ptrepack rewrites the whole file in a subprocess while holding hdf_lock -> do it rarely, not after every save.
+            if not hasattr(self, '_last_repack'):
+                self._last_repack = time.time()
+            if time.time() - self._last_repack > getattr(self, 'repack_interval_s', 600.):
+                self._last_repack = time.time()
                 ptrepack_thread(file=os.path.split(filepath)[1], folder=os.path.split(filepath)[0], lock=self.hdf_lock)
-            else:
-                logging.getLogger().info('hdf-file is not repacked. {} {}'.format(self.save_dur_list[-1], self.seconds_since_last_save(filepath)))
             t.append(time.time() - t0)
             self.filepath = filepath
             if notify:
@@ -466,6 +477,73 @@ class Data:
                     self.save_dur_list.append(sum(t))
                 else:
                     self.save_dur_list = [sum(t)]
+
+    # ---- array columns (traces) ------------------------------------------------------------------------------
+    @staticmethod
+    def _is_array_column(series):
+        """True if the column holds 1-d numeric numpy arrays of one common length (unfinished rows may hold anything else)."""
+        vals = [v for v in series if isinstance(v, np.ndarray) and v.ndim == 1 and v.dtype.kind in 'iuf']
+        return len(vals) > 0 and len({v.size for v in vals}) == 1
+
+    @staticmethod
+    def _array_column_rows(series):
+        """The finished prefix of the column, i.e. all leading cells that are numpy arrays."""
+        return list(itertools.takewhile(lambda v: isinstance(v, np.ndarray), series))
+
+    @staticmethod
+    def _array_checksum(M):
+        # weighted row sum: cheap, and detects deleted / re-measured / reordered rows (remeasure!)
+        return (M.astype(np.float64) * np.arange(1, M.shape[1] + 1)).sum(axis=1)
+
+    def _hdf_sync_array_column(self, h5, col):
+        """Make node '/arr_<col>' equal to the finished rows of self.df[col], writing only what changed."""
+        import tables
+        rows = self._array_column_rows(self.df[col])
+        if len(rows) == 0:
+            return
+        M = np.stack(rows)
+        chk = self._array_checksum(M)
+        if M.dtype.kind in 'iu':
+            dt = np.promote_types(np.min_scalar_type(int(M.min())), np.min_scalar_type(int(M.max())))
+        else:
+            dt = M.dtype
+        data_name, chk_name = 'arr_{}'.format(col), 'chk_{}'.format(col)
+        keep = 0
+        reuse = False
+        if '/' + data_name in h5 and '/' + chk_name in h5:
+            ea, ck = h5.get_node('/', data_name), h5.get_node('/', chk_name)
+            reuse = ea.shape[1] == M.shape[1] and ck.nrows == ea.nrows and np.can_cast(dt, ea.dtype, 'safe')
+            if reuse:
+                m = min(ea.nrows, len(M))
+                bad = np.nonzero(ck[:m] != chk[:m])[0]
+                keep = int(bad[0]) if len(bad) > 0 else m
+                if ea.nrows > keep:
+                    ea.truncate(keep)
+                    ck.truncate(keep)
+            else:
+                h5.remove_node('/', data_name)
+                h5.remove_node('/', chk_name)
+        if not reuse:
+            filters = tables.Filters(complevel=1, complib='blosc', shuffle=True)
+            ea = h5.create_earray('/', data_name, atom=tables.Atom.from_dtype(np.dtype(dt)), shape=(0, M.shape[1]), filters=filters)
+            ck = h5.create_earray('/', chk_name, atom=tables.Float64Atom(), shape=(0,))
+        if keep < len(M):
+            ea.append(M[keep:].astype(ea.dtype))
+            ck.append(chk[keep:])
+
+    def _hdf_read_array_columns(self, h5, df):
+        for node in list(h5.iter_nodes('/')):
+            name = node._v_name
+            if not name.startswith('arr_') or name[4:] not in df.columns:
+                continue
+            arr = node[:]
+            small = arr.dtype.kind in 'iu' and arr.size > 0 and arr.max() < 2 ** 15
+            vals = np.empty(len(df), dtype=object)
+            vals[:] = np.nan                      # rows without stored trace (unfinished) -> NaN -> removed by dropnan()
+            for i in range(min(len(arr), len(df))):
+                vals[i] = arr[i].astype(np.int16) if small else arr[i]
+            df[name[4:]] = vals                   # same column position as before
+        return df
 
     def get_parameters_df(self, l):
         df_append = l_to_df(l)

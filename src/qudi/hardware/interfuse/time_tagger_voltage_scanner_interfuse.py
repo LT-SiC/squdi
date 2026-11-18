@@ -24,8 +24,8 @@ For every line the interfuse
 During the backward line the slow axis moves to the next line, so the scan runs without jumps. At the end the scanner
 goes back to where it was before the scan. The module state is 'locked' during the scan and 'idle' afterwards.
 
-The time tagger module itself is not changed: only count_between_markers(click_channel, begin_channel, end_channel,
-n_values) of it is used. Set the trigger level of the begin channel in the channels_params of the Time Tagger config.
+From the time tagger module only count_between_markers(click_channel, begin_channel, end_channel,
+n_values) is used. Set the trigger level of the begin channel in the channels_params of the Time Tagger config.
 
 Example config:
 
