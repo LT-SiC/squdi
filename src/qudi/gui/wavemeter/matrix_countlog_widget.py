@@ -22,20 +22,14 @@ If not, see <https://www.gnu.org/licenses/>.
 __all__ = ['PLEDataWidget']
 
 
-import os
 import numpy as np
-from typing import Tuple, Union, Sequence
-from PySide2 import QtCore, QtWidgets, QtGui
-from typing import Optional, List
-from qudi.util.widgets.plotting.plot_widget import PlotWidget
+from typing import Tuple
+from PySide6 import QtCore, QtWidgets
+from typing import Optional
 from qudi.util.widgets.plotting.image_widget import ImageWidget
-from qudi.util.widgets.plotting.plot_item import XYPlotItem
-from qudi.util.paths import get_artwork_dir
 
-from qudi.util.colordefs import ColorScaleRdBuRev as ColorScale
-from pyqtgraph import mkPen, mkBrush, PlotWidget, BarGraphItem
+from qudi.util.colordefs import ColorScaleInferno as ColorScale
 
-from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
 class MatrixCountlogDataWidget(QtWidgets.QWidget):
     """
     """

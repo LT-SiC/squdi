@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>window</class>
+ <widget class="QWidget" name="window">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>947</width>
+    <height>880</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Transition Tracker</string>
+  </property>
+  <property name="windowOpacity">
+   <double>1.000000000000000</double>
+  </property>
+  <property name="autoFillBackground">
+   <bool>false</bool>
+  </property>
+  <widget class="QPushButton" name="remove_next_script_button">
+   <property name="geometry">
+    <rect>
+     <x>680</x>
+     <y>970</y>
+     <width>761</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Remove next script</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="set_stop_request_button">
+   <property name="geometry">
+    <rect>
+     <x>680</x>
+     <y>1010</y>
+     <width>761</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Set stop_request</string>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="current_local_oscillator_freq_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>40</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>20</y>
+     <width>151</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>current_local_oscillator_freq</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label_2">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>80</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>mw_mixing_frequency_L (MHz)</string>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="mw_mixing_frequency_L_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>100</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label_3">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>20</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>B field</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label_4">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>80</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>mw_mixing_frequency_C</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label_5">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>370</x>
+     <y>20</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>off axis B field</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label_6">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>370</x>
+     <y>80</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>mw_mixing_frequency_R</string>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="Bfield_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>40</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="mw_mixing_frequency_C_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>100</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="off_axis_B_field_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>370</x>
+     <y>40</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="mw_mixing_frequency_R_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>370</x>
+     <y>100</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="current_local_oscillator_freq_label_7">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>570</x>
+     <y>50</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>zero_field_splitting (MHz)</string>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="zero_field_splitting_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>570</x>
+     <y>70</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="ple_A2_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>160</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QTextBrowser" name="ple_A1_text_field">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>160</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>false</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="ple_A2_label">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>140</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>PLE A2 (V)</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="ple_A1_label">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>140</y>
+     <width>161</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>PLE A1 (V)</string>
+   </property>
+  </widget>
+  <widget class="QTabWidget" name="tabWidget">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>200</y>
+     <width>881</width>
+     <height>581</height>
+    </rect>
+   </property>
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <property name="currentIndex">
+    <number>0</number>
+   </property>
+   <widget class="QWidget" name="auxiliary_nuclear_spin">
+    <attribute name="title">
+     <string>auxiliary_nuclear_spin_freqs</string>
+    </attribute>
+    <widget class="QTableWidget" name="script_queue_table">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>1</y>
+       <width>721</width>
+       <height>551</height>
+      </rect>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="Register">
+    <attribute name="title">
+     <string>Register</string>
+    </attribute>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

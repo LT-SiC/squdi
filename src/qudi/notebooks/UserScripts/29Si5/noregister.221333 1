@@ -1,0 +1,430 @@
+0      NuclearOps         23763.221333 1
+   0      triggerwait        0.864000   1
+      0      trigger            0.864000   wait 0 1
+      1      waittrigger        0.000000   wait 0 0
+      2      _missing_smpls_    0.000000   wait 0 0
+   1      Repump             30.080000  5
+      0      Repump             6.016000   wait 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   2      Decay              1.024000   1
+      0      RepumpDecay        1.024000   wait 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   3      init               300.000000 30
+      0      resonant_init      10.000000  sinehermite [5777.44574452 5782.25574452 5916.85733314 5921.66733314] [0.   0.   0.24 0.24] [0. 0. 0. 0.] 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   4      init_correction    18.538667  1
+      0      resonant_init      0.000000   sinehermite [5777.44574452 5782.25574452 5916.85733314 5921.66733314] [0.   0.   0.24 0.24] [0. 0. 0. 0.] 0 0
+      1      resonant_init      1.024000   wait 0 0
+      2      Init Decay         0.512000   wait 0 0
+      3                         0.256000   wait 0 0
+      4      e_rabi             0.278000   sine [5782.25574452] [0.95] [0.] 0 0
+      5      RFSafetyWait1      0.992000   wait 0 0
+      6      nuc                13.473000  wait 0 0
+      7      RFSafetyWait2      2.000000   wait 0 0
+      8      _missing_smpls_    0.003667   wait 0 0
+   5      ssr29si8_A2        8800.000000 2000
+      0      triggerTrue_gate   0.064000   wait 1 0
+      1      MW                 0.192000   wait 0 0
+      2      MW                 0.502000   sinehermite [5777.44574452] [0.408] [0.] 0 0
+      3      MW                 0.502000   sinehermite [5916.85733314] [0.95] [0.] 0 0
+      4      Laser A2           3.072000   wait 0 0
+      5      Count              0.000000   wait 0 0
+      6      triggerTrue2_memory 0.064000   wait 0 0
+      7      _missing_smpls_    0.004000   wait 0 0
+   6      init               300.000000 30
+      0      resonant_init      10.000000  sinehermite [5782.25574452 5921.66733314] [0.   0.24] [0. 0.] 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   7      init_correction    1.536000   1
+      0      resonant_init      0.000000   sinehermite [5782.25574452 5921.66733314] [0.   0.24] [0. 0.] 0 0
+      1      resonant_init      1.024000   wait 0 0
+      2      Init Decay         0.512000   wait 0 0
+      3      _missing_smpls_    0.000000   wait 0 0
+   8      Seq                4233.456000 3
+      0                         0.256000   wait 0 0
+      1      electron rabi      0.170000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      2                         0.507000   wait 0 0
+      3      nuc                26.496000  wait 0 0
+      4                         0.507000   wait 0 0
+      5      electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      6                         0.523000   wait 0 0
+      7      nuc                54.144000  wait 0 0
+      8                         0.523000   wait 0 0
+      9      electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      10                        0.523000   wait 0 0
+      11     nuc                54.144000  wait 0 0
+      12                        0.523000   wait 0 0
+      13     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [180.] 0 0
+      14                        0.523000   wait 0 0
+      15     nuc                54.144000  wait 0 0
+      16                        0.523000   wait 0 0
+      17     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      18                        0.523000   wait 0 0
+      19     nuc                54.144000  wait 0 0
+      20                        0.523000   wait 0 0
+      21     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      22                        0.523000   wait 0 0
+      23     nuc                54.144000  wait 0 0
+      24                        0.523000   wait 0 0
+      25     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      26                        0.523000   wait 0 0
+      27     nuc                54.144000  wait 0 0
+      28                        0.523000   wait 0 0
+      29     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      30                        0.523000   wait 0 0
+      31     nuc                54.144000  wait 0 0
+      32                        0.523000   wait 0 0
+      33     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [180.] 0 0
+      34                        0.523000   wait 0 0
+      35     nuc                54.144000  wait 0 0
+      36                        0.523000   wait 0 0
+      37     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      38                        0.523000   wait 0 0
+      39     nuc                54.144000  wait 0 0
+      40                        0.523000   wait 0 0
+      41     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      42                        0.507000   wait 0 0
+      43     nuc                26.496000  wait 0 0
+      44                        0.507000   wait 0 0
+      45     electron rabi      0.170000   sinehermite [5782.25574452] [0.95] [180.] 0 0
+      46                        0.507000   wait 0 0
+      47     nuc                26.496000  wait 0 0
+      48                        0.507000   wait 0 0
+      49     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [30.] 0 0
+      50                        0.523000   wait 0 0
+      51     nuc                54.144000  wait 0 0
+      52                        0.523000   wait 0 0
+      53     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [0.] 0 0
+      54                        0.523000   wait 0 0
+      55     nuc                54.144000  wait 0 0
+      56                        0.523000   wait 0 0
+      57     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      58                        0.523000   wait 0 0
+      59     nuc                54.144000  wait 0 0
+      60                        0.523000   wait 0 0
+      61     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [0.] 0 0
+      62                        0.523000   wait 0 0
+      63     nuc                54.144000  wait 0 0
+      64                        0.523000   wait 0 0
+      65     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [30.] 0 0
+      66                        0.523000   wait 0 0
+      67     nuc                54.144000  wait 0 0
+      68                        0.523000   wait 0 0
+      69     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [30.] 0 0
+      70                        0.523000   wait 0 0
+      71     nuc                54.144000  wait 0 0
+      72                        0.523000   wait 0 0
+      73     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [0.] 0 0
+      74                        0.523000   wait 0 0
+      75     nuc                54.144000  wait 0 0
+      76                        0.523000   wait 0 0
+      77     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      78                        0.523000   wait 0 0
+      79     nuc                54.144000  wait 0 0
+      80                        0.523000   wait 0 0
+      81     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [0.] 0 0
+      82                        0.523000   wait 0 0
+      83     nuc                54.144000  wait 0 0
+      84                        0.523000   wait 0 0
+      85     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [30.] 0 0
+      86                        0.507000   wait 0 0
+      87     nuc                26.496000  wait 0 0
+      88                        0.507000   wait 0 0
+      89     resonant_init      300.000000 sinehermite [5782.25574452 5921.66733314] [0.   0.24] [0. 0.] 0 0
+      90     resonant_init      1.024000   wait 0 0
+      91     Init Decay         0.512000   wait 0 0
+      92     _missing_smpls_    0.000000   wait 0 0
+   9      RF Rabi            758.101333 1
+      0      RFSafetyWait1      0.992000   wait 0 0
+      1      nuc                200.000000 wait 0 0
+      2      RFSafetyWait2      2.000000   wait 0 0
+      3                         0.256000   wait 0 0
+      4      electron rabi      0.170000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      5                         0.507000   wait 0 0
+      6      nuc                26.496000  wait 0 0
+      7                         0.507000   wait 0 0
+      8      electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      9                         0.523000   wait 0 0
+      10     nuc                54.144000  wait 0 0
+      11                        0.523000   wait 0 0
+      12     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      13                        0.523000   wait 0 0
+      14     nuc                54.144000  wait 0 0
+      15                        0.523000   wait 0 0
+      16     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [180.] 0 0
+      17                        0.523000   wait 0 0
+      18     nuc                54.144000  wait 0 0
+      19                        0.523000   wait 0 0
+      20     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      21                        0.523000   wait 0 0
+      22     nuc                54.144000  wait 0 0
+      23                        0.523000   wait 0 0
+      24     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      25                        0.523000   wait 0 0
+      26     nuc                54.144000  wait 0 0
+      27                        0.523000   wait 0 0
+      28     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      29                        0.523000   wait 0 0
+      30     nuc                54.144000  wait 0 0
+      31                        0.523000   wait 0 0
+      32     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      33                        0.523000   wait 0 0
+      34     nuc                54.144000  wait 0 0
+      35                        0.523000   wait 0 0
+      36     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [180.] 0 0
+      37                        0.523000   wait 0 0
+      38     nuc                54.144000  wait 0 0
+      39                        0.523000   wait 0 0
+      40     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [90.] 0 0
+      41                        0.523000   wait 0 0
+      42     nuc                54.144000  wait 0 0
+      43                        0.523000   wait 0 0
+      44     electron rabi      0.278000   sinehermite [5782.25574452] [0.95] [120.] 0 0
+      45                        0.507000   wait 0 0
+      46     nuc                26.496000  wait 0 0
+      47                        0.507000   wait 0 0
+      48     electron rabi      0.170000   sinehermite [5782.25574452] [0.95] [180.] 0 0
+      49     _missing_smpls_    0.003333   wait 0 0
+   10     Readout            16.469333  1
+      0      RFSafetyWait1      0.992000   wait 0 0
+      1      nuc                13.473000  wait 0 0
+      2      RFSafetyWait2      2.000000   wait 0 0
+      3      _missing_smpls_    0.004333   wait 0 0
+   11     ssr29si8_A2        8800.000000 2000
+      0      triggerTrue_gate   0.064000   wait 1 0
+      1      MW                 0.192000   wait 0 0
+      2      MW                 0.502000   sinehermite [5777.44574452] [0.408] [0.] 0 0
+      3      MW                 0.502000   sinehermite [5916.85733314] [0.95] [0.] 0 0
+      4      Laser A2           3.072000   wait 0 0
+      5      Count              0.000000   wait 0 0
+      6      triggerTrue2_memory 0.064000   wait 0 0
+      7      _missing_smpls_    0.004000   wait 0 0
+   12     ssrcharge_state    502.128000 1
+      0      gate1              0.064000   wait 1 0
+      1      State_check        500.000000 wait 0 0
+      2      wait               2.000000   wait 0 0
+      3      memory             0.064000   wait 0 0
+      4      Count              0.000000   wait 0 0
+      5      _missing_smpls_    0.000000   wait 0 0
+   13     w_trig_safety      1.024000   1
+      0      w_trig_safety      1.024000   wait 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+-------------------------------------------------------------------
+
+
+-------------------------------------------------------------------
+0      NuclearOps         23763.221333 1
+   0      triggerwait        0.864000   1
+      0      trigger            0.864000   wait 0 0
+      1      waittrigger        0.000000   wait 0 0
+      2      _missing_smpls_    0.000000   wait 0 0
+   1      Repump             30.080000  5
+      0      Repump             6.016000   wait 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   2      Decay              1.024000   1
+      0      RepumpDecay        1.024000   wait 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   3      init               300.000000 30
+      0      resonant_init      10.000000  wait 1 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   4      init_correction    18.538667  1
+      0      resonant_init      0.000000   wait 1 0
+      1      resonant_init      1.024000   wait 0 0
+      2      Init Decay         0.512000   wait 0 0
+      3                         0.256000   wait 1 0
+      4      e_rabi             0.278000   wait 1 0
+      5      RFSafetyWait1      0.992000   wait 0 0
+      6      nuc                13.473000  sinehermite_rf [8.9915829] [0.9] [0.] 0 0
+      7      RFSafetyWait2      2.000000   wait 0 0
+      8      _missing_smpls_    0.003667   wait 0 0
+   5      ssr29si8_A2        8800.000000 2000
+      0      triggerTrue_gate   0.064000   wait 1 0
+      1      MW                 0.192000   wait 1 0
+      2      MW                 0.502000   wait 1 0
+      3      MW                 0.502000   wait 1 0
+      4      Laser A2           3.072000   wait 0 0
+      5      Count              0.000000   wait 0 0
+      6      triggerTrue2_memory 0.064000   wait 0 1
+      7      _missing_smpls_    0.004000   wait 0 0
+   6      init               300.000000 30
+      0      resonant_init      10.000000  wait 1 0
+      1      _missing_smpls_    0.000000   wait 0 0
+   7      init_correction    1.536000   1
+      0      resonant_init      0.000000   wait 1 0
+      1      resonant_init      1.024000   wait 0 0
+      2      Init Decay         0.512000   wait 0 0
+      3      _missing_smpls_    0.000000   wait 0 0
+   8      Seq                4233.456000 3
+      0                         0.256000   wait 1 0
+      1      electron rabi      0.170000   wait 1 0
+      2                         0.507000   wait 1 0
+      3      nuc                26.496000  sinehermite_rf [1.73652] [0.0818] [0.] 0 0
+      4                         0.507000   wait 1 0
+      5      electron rabi      0.278000   wait 1 0
+      6                         0.523000   wait 1 0
+      7      nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [9.78477058] 0 0
+      8                         0.523000   wait 1 0
+      9      electron rabi      0.278000   wait 1 0
+      10                        0.523000   wait 1 0
+      11     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [19.56954116] 0 0
+      12                        0.523000   wait 1 0
+      13     electron rabi      0.278000   wait 1 0
+      14                        0.523000   wait 1 0
+      15     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [29.35431174] 0 0
+      16                        0.523000   wait 1 0
+      17     electron rabi      0.278000   wait 1 0
+      18                        0.523000   wait 1 0
+      19     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [39.13908231] 0 0
+      20                        0.523000   wait 1 0
+      21     electron rabi      0.278000   wait 1 0
+      22                        0.523000   wait 1 0
+      23     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [48.92385289] 0 0
+      24                        0.523000   wait 1 0
+      25     electron rabi      0.278000   wait 1 0
+      26                        0.523000   wait 1 0
+      27     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [58.70862347] 0 0
+      28                        0.523000   wait 1 0
+      29     electron rabi      0.278000   wait 1 0
+      30                        0.523000   wait 1 0
+      31     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [68.49339405] 0 0
+      32                        0.523000   wait 1 0
+      33     electron rabi      0.278000   wait 1 0
+      34                        0.523000   wait 1 0
+      35     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [78.27816463] 0 0
+      36                        0.523000   wait 1 0
+      37     electron rabi      0.278000   wait 1 0
+      38                        0.523000   wait 1 0
+      39     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [88.06293521] 0 0
+      40                        0.523000   wait 1 0
+      41     electron rabi      0.278000   wait 1 0
+      42                        0.507000   wait 1 0
+      43     nuc                26.496000  sinehermite_rf [1.73652] [0.0818] [97.84770579] 0 0
+      44                        0.507000   wait 1 0
+      45     electron rabi      0.170000   wait 1 0
+      46                        0.507000   wait 1 0
+      47     nuc                26.496000  sinehermite_rf [1.73652] [0.0818] [158.19364724] 0 0
+      48                        0.507000   wait 1 0
+      49     electron rabi      0.278000   wait 1 0
+      50                        0.523000   wait 1 0
+      51     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [167.97841781] 0 0
+      52                        0.523000   wait 1 0
+      53     electron rabi      0.278000   wait 1 0
+      54                        0.523000   wait 1 0
+      55     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [177.76318839] 0 0
+      56                        0.523000   wait 1 0
+      57     electron rabi      0.278000   wait 1 0
+      58                        0.523000   wait 1 0
+      59     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-172.45204103] 0 0
+      60                        0.523000   wait 1 0
+      61     electron rabi      0.278000   wait 1 0
+      62                        0.523000   wait 1 0
+      63     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-162.66727045] 0 0
+      64                        0.523000   wait 1 0
+      65     electron rabi      0.278000   wait 1 0
+      66                        0.523000   wait 1 0
+      67     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-152.88249987] 0 0
+      68                        0.523000   wait 1 0
+      69     electron rabi      0.278000   wait 1 0
+      70                        0.523000   wait 1 0
+      71     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-143.09772929] 0 0
+      72                        0.523000   wait 1 0
+      73     electron rabi      0.278000   wait 1 0
+      74                        0.523000   wait 1 0
+      75     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-133.31295871] 0 0
+      76                        0.523000   wait 1 0
+      77     electron rabi      0.278000   wait 1 0
+      78                        0.523000   wait 1 0
+      79     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-123.52818813] 0 0
+      80                        0.523000   wait 1 0
+      81     electron rabi      0.278000   wait 1 0
+      82                        0.523000   wait 1 0
+      83     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [-113.74341756] 0 0
+      84                        0.523000   wait 1 0
+      85     electron rabi      0.278000   wait 1 0
+      86                        0.507000   wait 1 0
+      87     nuc                26.496000  sinehermite_rf [1.73652] [0.0818] [-103.95864698] 0 0
+      88                        0.507000   wait 1 0
+      89     resonant_init      300.000000 wait 1 0
+      90     resonant_init      1.024000   wait 0 0
+      91     Init Decay         0.512000   wait 0 0
+      92     _missing_smpls_    0.000000   wait 0 0
+   9      RF Rabi            758.101333 1
+      0      RFSafetyWait1      0.992000   wait 0 0
+      1      nuc                200.000000 sinehermite_rf [1.73652] [0.04] [2.761] 0 0
+      2      RFSafetyWait2      2.000000   wait 0 0
+      3                         0.256000   wait 1 0
+      4      electron rabi      0.170000   wait 1 0
+      5                         0.507000   wait 1 0
+      6      nuc                26.496000  sinehermite_rf [1.73652] [0.0818] [74.8749665] 0 0
+      7                         0.507000   wait 1 0
+      8      electron rabi      0.278000   wait 1 0
+      9                         0.523000   wait 1 0
+      10     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [84.65973708] 0 0
+      11                        0.523000   wait 1 0
+      12     electron rabi      0.278000   wait 1 0
+      13                        0.523000   wait 1 0
+      14     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [94.44450766] 0 0
+      15                        0.523000   wait 1 0
+      16     electron rabi      0.278000   wait 1 0
+      17                        0.523000   wait 1 0
+      18     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [104.22927824] 0 0
+      19                        0.523000   wait 1 0
+      20     electron rabi      0.278000   wait 1 0
+      21                        0.523000   wait 1 0
+      22     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [114.01404882] 0 0
+      23                        0.523000   wait 1 0
+      24     electron rabi      0.278000   wait 1 0
+      25                        0.523000   wait 1 0
+      26     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [123.7988194] 0 0
+      27                        0.523000   wait 1 0
+      28     electron rabi      0.278000   wait 1 0
+      29                        0.523000   wait 1 0
+      30     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [133.58358998] 0 0
+      31                        0.523000   wait 1 0
+      32     electron rabi      0.278000   wait 1 0
+      33                        0.523000   wait 1 0
+      34     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [143.36836056] 0 0
+      35                        0.523000   wait 1 0
+      36     electron rabi      0.278000   wait 1 0
+      37                        0.523000   wait 1 0
+      38     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [153.15313113] 0 0
+      39                        0.523000   wait 1 0
+      40     electron rabi      0.278000   wait 1 0
+      41                        0.523000   wait 1 0
+      42     nuc                54.144000  sinehermite_rf [1.73652] [0.0818] [162.93790171] 0 0
+      43                        0.523000   wait 1 0
+      44     electron rabi      0.278000   wait 1 0
+      45                        0.507000   wait 1 0
+      46     nuc                26.496000  sinehermite_rf [1.73652] [0.0818] [172.72267229] 0 0
+      47                        0.507000   wait 1 0
+      48     electron rabi      0.170000   wait 1 0
+      49     _missing_smpls_    0.003333   wait 0 0
+   10     Readout            16.469333  1
+      0      RFSafetyWait1      0.992000   wait 0 0
+      1      nuc                13.473000  sinehermite_rf [8.9915829] [0.9] [0.] 0 0
+      2      RFSafetyWait2      2.000000   wait 0 0
+      3      _missing_smpls_    0.004333   wait 0 0
+   11     ssr29si8_A2        8800.000000 2000
+      0      triggerTrue_gate   0.064000   wait 1 0
+      1      MW                 0.192000   wait 1 0
+      2      MW                 0.502000   wait 1 0
+      3      MW                 0.502000   wait 1 0
+      4      Laser A2           3.072000   wait 0 0
+      5      Count              0.000000   wait 0 0
+      6      triggerTrue2_memory 0.064000   wait 0 1
+      7      _missing_smpls_    0.004000   wait 0 0
+   12     ssrcharge_state    502.128000 1
+      0      gate1              0.064000   wait 0 0
+      1      State_check        500.000000 wait 0 0
+      2      wait               2.000000   wait 0 0
+      3      memory             0.064000   wait 0 1
+      4      Count              0.000000   wait 0 0
+      5      _missing_smpls_    0.000000   wait 0 0
+   13     w_trig_safety      1.024000   1
+      0      w_trig_safety      1.024000   wait 0 0
+      1      _missing_smpls_    0.000000   wait 0 0
+-------------------------------------------------------------------
+
+
+-------------------------------------------------------------------
+[([], 795.0), (5,), (['repump'], 6016.0), (1,), ([], 1024.0), (30,), (['A1', 'laser'], 10000.0), (1,), (['A1', 'laser'], 0.0), (['A1', 'laser'], 1024.0), ([], 512.0), ([], 256.0), ([], 278.0), (['gateRF'], 992.0), (['gateRF'], 13473.0), (['gateRF'], 2000.0), (2000,), ([], 64.0), ([], 192.0), ([], 502.0), ([], 502.0), (['laser', 'A2'], 3072.0), ([], 0.0), ([], 64.0), (30,), (['A1', 'laser'], 10000.0), (1,), (['A1', 'laser'], 0.0), (['A1', 'laser'], 1024.0), ([], 512.0), (3,), ([], 256.0), (['gateRF'], 169.99999999999997), (['gateRF'], 507.0), (['gateRF'], 26496.0), (['gateRF'], 507.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 507.0), (['gateRF'], 26496.0), (['gateRF'], 507.0), (['gateRF'], 169.99999999999997), (['gateRF'], 507.0), (['gateRF'], 26496.0), (['gateRF'], 507.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 507.0), (['gateRF'], 26496.0), (['gateRF'], 507.0), (['A1', 'laser'], 300000.0), (['A1', 'laser'], 1024.0), ([], 512.0), (1,), (['gateRF'], 992.0), (['gateRF'], 200000.0), (['gateRF'], 2000.0), ([], 256.0), (['gateRF'], 169.99999999999997), (['gateRF'], 507.0), (['gateRF'], 26496.0), (['gateRF'], 507.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 523.0), (['gateRF'], 54144.0), (['gateRF'], 523.0), (['gateRF'], 277.99999999999994), (['gateRF'], 507.0), (['gateRF'], 26496.0), (['gateRF'], 507.0), (['gateRF'], 169.99999999999997), (1,), (['gateRF'], 992.0), (['gateRF'], 13473.0), (['gateRF'], 2000.0), (2000,), ([], 64.0), ([], 192.0), ([], 502.0), ([], 502.0), (['laser', 'A2'], 3072.0), ([], 0.0), ([], 64.0), (1,), ([], 64.0), (['A1', 'A2', 'laser'], 500000.0), ([], 2000.0), ([], 64.0), ([], 0.0)]
+-------------------------------------------------------------------

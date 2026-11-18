@@ -89,7 +89,7 @@ class NIXTTSeriesFiniteSamplingInput(FiniteSamplingInputInterface):
         'max_channel_samples_buffer', default=25e6, missing='info')
 
     # TODO: check limits
-    _sample_rate_limits = ConfigOption(name='sample_rate_limits', default=(1, 1e6))
+    _sample_rate_limits = ConfigOption(name='sample_rate_limits', default=(1e-3, 1e6))
     _frame_size_limits = ConfigOption(name='frame_size_limits', default=(1, 1e9))
 
     _rw_timeout = ConfigOption('read_write_timeout', default=10, missing='nothing')
@@ -326,6 +326,8 @@ class NIXTTSeriesFiniteSamplingInput(FiniteSamplingInputInterface):
                 'Unable to set frame size. Data acquisition in progress.'
             self._frame_size = samples
             self.log.debug(f'set frame_size to {self._frame_size}')
+            
+
     def _init_tt_cbm_task(self):
         """
         Set up tasks for digital event counting with the TIMETAGGER

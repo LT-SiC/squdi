@@ -23,14 +23,14 @@ If not, see <https://www.gnu.org/licenses/>.
 __all__ = ('OptimizerDockWidget',)
 
 import numpy as np
-from PySide2 import QtCore, QtWidgets
-from pyqtgraph import PlotDataItem, mkPen
+from PySide6 import QtCore, QtWidgets
+from pyqtgraph import mkPen
 import copy as cp
 
 from qudi.util.widgets.plotting.plot_widget import DataSelectionPlotWidget
 from qudi.util.widgets.plotting.plot_item import DataImageItem, XYPlotItem
 from qudi.util.colordefs import QudiPalette
-from qudi.util.colordefs import ColorScaleRdBuRev as ColorScale
+from qudi.util.colordefs import ColorScaleInferno as ColorScale
 
 class OptimizerDockWidget(QtWidgets.QDockWidget):
     """

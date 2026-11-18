@@ -25,14 +25,14 @@ __all__ = ['Scan1DWidget', 'Scan2DWidget']
 import os
 import numpy as np
 from typing import Tuple, Union, Sequence
-from PySide2 import QtCore, QtWidgets, QtGui
+from PySide6 import QtCore, QtWidgets, QtGui
 from typing import Optional, List
 from qudi.util.widgets.plotting.plot_widget import RubberbandZoomSelectionPlotWidget
 from qudi.util.widgets.plotting.image_widget import RubberbandZoomSelectionImageWidget
 from qudi.util.widgets.plotting.plot_item import XYPlotItem
 from qudi.util.paths import get_artwork_dir
 from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
-from qudi.util.colordefs import ColorScaleRdBuRev as ColorScale
+from qudi.util.colordefs import ColorScaleInferno as ColorScale
 
 class _BaseScanWidget(QtWidgets.QWidget):
     """ Base Widget to interactively display multichannel 1D or 2D scan data as well as

@@ -23,7 +23,7 @@ If not, see <https://www.gnu.org/licenses/>.
 __all__ = ('OptimizerSettingDialog', 'OptimizerSettingWidget', 'OptimizerAxesWidget')
 
 import copy as cp
-from PySide2 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from qudi.util.widgets.scientific_spinbox import ScienDSpinBox
 from qudi.logic.ple.optimize_logic import OptimizerScanSequence
@@ -84,22 +84,37 @@ class OptimizerSettingWidget(QtWidgets.QWidget):
         self.data_channel_combobox = QtWidgets.QComboBox()
         self.data_channel_combobox.addItems(tuple(ch.name for ch in scanner_channels))
 
+        self.tracking_period_spinbox = ScienDSpinBox()
+        self.tracking_period_spinbox.setRange(0, 1e7)
+        self.tracking_period_spinbox.setSuffix(' s')
+        self.tracking_period_spinbox.setValue(5)
+
         self.optimize_sequence_combobox = QtWidgets.QComboBox()
         self.optimize_sequence_combobox.addItems(str(seq) for seq in self.available_opt_sequences)
 
         label = QtWidgets.QLabel('Data channel:')
         label.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
         label.setFont(font)
+        
+        label_opt_seq = QtWidgets.QLabel('Sequence:')
+        label_opt_seq.setAlignment(QtCore.Qt.AlignLeft)
+        label_opt_seq.setFont(font)
+
+        label_tracking_period = QtWidgets.QLabel('Tracking period:')
+        label_tracking_period.setAlignment(QtCore.Qt.AlignLeft)
+        label_tracking_period.setFont(font)
+
         misc_settings_groupbox = QtWidgets.QGroupBox('General settings')
         misc_settings_groupbox.setFont(font)
         misc_settings_groupbox.setLayout(QtWidgets.QGridLayout())
         misc_settings_groupbox.layout().addWidget(label, 0, 0)
         misc_settings_groupbox.layout().addWidget(self.data_channel_combobox, 0, 1)
+        misc_settings_groupbox.layout().addWidget(label_tracking_period, 1, 0)
+        misc_settings_groupbox.layout().addWidget(self.tracking_period_spinbox, 1, 1)
         misc_settings_groupbox.layout().setColumnStretch(1, 1)
+        misc_settings_groupbox.layout().setColumnStretch(2, 1)
 
-        label_opt_seq = QtWidgets.QLabel('Sequence:')
-        label_opt_seq.setAlignment(QtCore.Qt.AlignLeft)
-        label_opt_seq.setFont(font)
+
         self.axes_widget = OptimizerAxesWidget(scanner_axes=scanner_axes)
         self.axes_widget.setObjectName('optimizer_axes_widget')
         scan_settings_groupbox = QtWidgets.QGroupBox('Scan settings')
@@ -121,7 +136,8 @@ class OptimizerSettingWidget(QtWidgets.QWidget):
                 'scan_sequence': self.available_opt_sequences[self.optimize_sequence_combobox.currentIndex()].sequence,
                 'scan_resolution': self.axes_widget.resolution,
                 'scan_range': self.axes_widget.range,
-                'scan_frequency': self.axes_widget.frequency}
+                'scan_frequency': self.axes_widget.frequency,
+                'tracking_period': self.tracking_period_spinbox.value()}
 
     @property
     def available_opt_sequences(self):
@@ -133,6 +149,10 @@ class OptimizerSettingWidget(QtWidgets.QWidget):
             self.data_channel_combobox.blockSignals(True)
             self.data_channel_combobox.setCurrentText(settings['data_channel'])
             self.data_channel_combobox.blockSignals(False)
+        if 'tracking_period' in settings:
+            self.tracking_period_spinbox.blockSignals(True)
+            self.tracking_period_spinbox.setValue(settings['tracking_period'])
+            self.tracking_period_spinbox.blockSignals(False)
         if 'scan_sequence' in settings:
             self.optimize_sequence_combobox.blockSignals(True)
             try:
@@ -231,9 +251,12 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
             self.axes_widgets[ax_name]['range_spinbox'] = range_spinbox
             self.axes_widgets[ax_name]['freq_spinbox'] = freq_spinbox
 
+        
+
         layout.setColumnStretch(1, 1)
         layout.setColumnStretch(2, 1)
         layout.setColumnStretch(3, 1)
+       
         self.setLayout(layout)
         self.setMaximumHeight(self.sizeHint().height())
 

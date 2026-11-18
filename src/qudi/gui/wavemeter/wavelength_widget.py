@@ -22,15 +22,12 @@ If not, see <https://www.gnu.org/licenses/>.
 __all__ = ['PLEDataWidget']
 
 import pyqtgraph as pg
-from typing import Tuple, Union, Sequence
-from typing import Optional, List
-from PySide2 import QtCore
-from PySide2 import QtWidgets
+from typing import Tuple
+from typing import Optional
+from PySide6 import QtCore
+from PySide6 import QtWidgets
 import numpy as np
 from qudi.util.colordefs import QudiPalettePale as palette
-from qudi.util.widgets.toggle_switch import ToggleSwitch
-from qudi.util.widgets.scientific_spinbox import ScienDSpinBox
-from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
 
 class WavelengthDataWidget(QtWidgets.QWidget):
     """

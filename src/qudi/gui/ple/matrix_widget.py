@@ -1,16 +1,10 @@
 
-import os
-import numpy as np
-from typing import Tuple, Union, Sequence
-from PySide2 import QtCore, QtWidgets, QtGui
-from typing import Optional, List
-from qudi.util.widgets.plotting.plot_widget import PlotWidget
+from typing import Tuple
+from PySide6 import QtWidgets
+from typing import Optional
 from qudi.util.widgets.plotting.image_widget import ImageWidget
-from qudi.util.widgets.plotting.plot_item import XYPlotItem
-from qudi.util.paths import get_artwork_dir
 
-from qudi.util.colordefs import ColorScaleRdBuRev as ColorScale
-from pyqtgraph import mkPen, mkBrush, PlotWidget, BarGraphItem
+from qudi.util.colordefs import ColorScaleInferno as ColorScale
 
 from qudi.interface.scanning_probe_interface import ScanData, ScannerAxis, ScannerChannel
 
@@ -47,6 +41,7 @@ class PLE2DWidget(QtWidgets.QWidget):
     
         self.number_of_repeats=None
         self._scan_data = None
+        self._x_range = None
 
     @property
     def channel(self):
@@ -56,9 +51,11 @@ class PLE2DWidget(QtWidgets.QWidget):
     def channel(self, ch):
         self._channel = ch
         self.image_widget.set_axis_label('left', label=self._channel.name, unit=self._channel.unit)
-        self.image_widget.set_axis_label('bottom', label=self.axis.name.title(), unit=self.axis.unit)
         self.image_widget.set_data_label(label=self._channel.name, unit=self._channel.unit)
         self._update_scan_data()
+
+    def set_x_axis(self, label: str, unit: str) -> None:
+        self.image_widget.set_axis_label('bottom', label=label, unit=unit)
 
     def set_plot_range(self,
                        x_range: Optional[Tuple[float, float]] = None,
@@ -67,17 +64,20 @@ class PLE2DWidget(QtWidgets.QWidget):
         vb = self.image_item.getViewBox()
         vb.setRange(xRange=x_range, yRange=y_range)
 
-    def set_scan_data(self, accumulated_data, scan_data: ScanData) -> None:
+    def set_scan_data(self, plot_data, scan_data: ScanData, x_range=None) -> None:
         self._scan_data = scan_data
-        self._accumulated_data = accumulated_data
+        self._plot_data = plot_data
+        self._x_range = x_range
         self._update_scan_data()
 
     def _update_scan_data(self) -> None:
        
         current_channel = self._channel.name 
-        if self._scan_data is not None:
-            self.image_widget.set_image(self._accumulated_data[current_channel].T)    
-            matrix_range = (self._scan_data.scan_range[0], (0, self._accumulated_data[current_channel].shape[0]))
+        
+        if self._scan_data is not None and (self._plot_data is not None):
+            self.image_widget.set_image(self._plot_data[current_channel].T)    
+            x_range = self._scan_data.scan_range[0] if self._x_range is None else self._x_range
+            matrix_range = (x_range, (0, self._plot_data[current_channel].shape[0]))
             self.image_widget.set_image_extent(matrix_range,
                             adjust_for_px_size=True)
             self.image_widget.autoRange()

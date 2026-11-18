@@ -1,0 +1,102 @@
+{
+  "version": "1.0",
+  "title": "first_test_on_qudi",
+  "qubit_labels": [
+    "electron",
+    "Si1"
+  ],
+  "qubit_meta": [
+    {
+      "spin": "3/2"
+    },
+    {
+      "spin": "1/2"
+    }
+  ],
+  "local_gate_defs": [],
+  "placements": [
+    {
+      "id": "8838772b-6449-4081-a739-834466d46bbe",
+      "gate_def_id": "87ebd00c-23a4-4b40-a295-53a35d6ae000",
+      "col": 0,
+      "role_to_row": {
+        "control": 0,
+        "target": 1
+      },
+      "arg_values": {
+        "theta": "np.pi",
+        "phi": "0"
+      },
+      "use_default": {
+        "theta": false,
+        "phi": true
+      },
+      "control_states": {
+        "control": "ms=-3/2"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "sweeps",
+      "value_expr": "range(20)"
+    },
+    {
+      "name": "n_ssr1",
+      "value_expr": "[3000]"
+    },
+    {
+      "name": "n_ssr2",
+      "value_expr": "[3000]"
+    },
+    {
+      "name": "state",
+      "value_expr": "['0']"
+    },
+    {
+      "name": "init_power",
+      "value_expr": "[1.0]"
+    },
+    {
+      "name": "rf_dur_rabi",
+      "value_expr": "[-1]"
+    },
+    {
+      "name": "rf_amp_rabi",
+      "value_expr": "[*np.linspace(0, 0.9, 10)]"
+    },
+    {
+      "name": "cnot_amp",
+      "value_expr": "[0.5]"
+    },
+    {
+      "name": "pi_dur",
+      "value_expr": "[100]"
+    },
+    {
+      "name": "transition",
+      "value_expr": "['low']"
+    },
+    {
+      "name": "ddrf_dur",
+      "value_expr": "[1000]"
+    },
+    {
+      "name": "ddrf_amp",
+      "value_expr": "[0.3]"
+    }
+  ],
+  "ana_seq": [],
+  "ui_state": {
+    "cell_width": 110,
+    "cell_height": 60,
+    "splitter_sizes": [
+      220,
+      1299,
+      395
+    ]
+  },
+  "preamble": "# --- Experiment preamble ---\n",
+  "fixed_middle": "results = run_experiment(nuclear.parameters)\n",
+  "fixed_end": "# --- End of experiment ---\n"
+}

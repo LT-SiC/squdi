@@ -30,16 +30,15 @@ import operator
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from PySide2 import QtCore
+from PySide6 import QtCore
 
 from qudi.core.module import LogicBase
 from qudi.util.mutex import RecursiveMutex
 from qudi.core.connector import Connector
 from qudi.core.configoption import ConfigOption
 from qudi.core.statusvariable import StatusVar
-from qudi.util.datastorage import ImageFormat, NpyDataStorage, TextDataStorage
+from qudi.util.datastorage import TextDataStorage
 from qudi.util.units import ScaledFloat
-from qudi.util.colordefs import ColorScaleRdBuRev as ColorScale
 
 from qudi.interface.scanning_probe_interface import ScanData
 
@@ -103,11 +102,26 @@ class ScanningDataLogic(LogicBase):
 
     @_scan_history.representer
     def __scan_history_to_dicts(self, history):
+        # history = []
         return [data.to_dict() for data in history]
 
     @_scan_history.constructor
     def __scan_history_from_dicts(self, history_dicts):
-        return [ScanData.from_dict(hist_dict) for hist_dict in history_dicts]
+        # history_dicts = []
+        # A saved history from another version of the module or of ScanData (e.g. entries that are lists instead of
+        # dicts) must not break the activation: such entries are dropped and the history starts again from the rest.
+        history = []
+        if not isinstance(history_dicts, (list, tuple)):
+            self.log.warning('Saved scan history has an unexpected format ({}) and is ignored.'.format(
+                type(history_dicts).__name__))
+            return history
+        for hist_dict in history_dicts:
+            try:
+                history.append(ScanData.from_dict(hist_dict))
+            except Exception as err:
+                self.log.warning('Could not restore a saved scan from the history and dropped it: {}: {}'.format(
+                    type(err).__name__, err))
+        return history
 
     def get_current_scan_data(self, scan_axes=None):
         """
@@ -470,4 +484,3 @@ class ScanningDataLogic(LogicBase):
                 metainfo_str += target_str
 
         return metainfo_str
-

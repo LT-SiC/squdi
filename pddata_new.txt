@@ -1,0 +1,41 @@
+save rows=40 total=1.30s cumulative: data_generation.save=0.84 seq_file=1.04 pi3diamond=1.20 qutip_enh=1.30
+NuclearOps run_measurement: t0-t3 =  1.2960271835327148
+getting trace
+measurement finished
+save rows=80 total=1.04s cumulative: data_generation.save=0.89 seq_file=1.04 pi3diamond=1.04 qutip_enh=1.04
+NuclearOps run_measurement: t0-t3 =  1.0404703617095947
+getting trace
+measurement finished
+save rows=120 total=1.82s cumulative: data_generation.save=1.61 seq_file=1.82 pi3diamond=1.82 qutip_enh=1.82
+NuclearOps run_measurement: t0-t3 =  1.8227970600128174
+getting trace
+measurement finished
+save rows=160 total=0.97s cumulative: data_generation.save=0.64 seq_file=0.97 pi3diamond=0.97 qutip_enh=0.97
+NuclearOps run_measurement: t0-t3 =  0.9708518981933594
+getting trace
+measurement finished
+save rows=200 total=1.12s cumulative: data_generation.save=0.77 seq_file=1.12 pi3diamond=1.12 qutip_enh=1.12
+NuclearOps run_measurement: t0-t3 =  1.1162121295928955
+getting trace
+measurement finished
+save rows=240 total=1.09s cumulative: data_generation.save=0.73 seq_file=1.09 pi3diamond=1.09 qutip_enh=1.09
+NuclearOps run_measurement: t0-t3 =  1.0957069396972656
+
+save rows=3000 total=1.34s cumulative: data_generation.save=0.94 seq_file=1.34 pi3diamond=1.34 qutip_enh=1.34
+NuclearOps run_measurement: t0-t3 =  1.3370389938354492
+getting trace
+measurement finished
+save rows=3040 total=1.95s cumulative: data_generation.save=1.56 seq_file=1.95 pi3diamond=1.95 qutip_enh=1.95
+NuclearOps run_measurement: t0-t3 =  1.9455509185791016
+getting trace
+measurement finished
+save rows=3080 total=1.31s cumulative: data_generation.save=0.93 seq_file=1.30 pi3diamond=1.31 qutip_enh=1.31
+NuclearOps run_measurement: t0-t3 =  1.3140168190002441
+getting trace
+measurement finished
+save rows=3120 total=1.48s cumulative: data_generation.save=1.15 seq_file=1.48 pi3diamond=1.48 qutip_enh=1.48
+NuclearOps run_measurement: t0-t3 =  1.4822838306427002
+getting trace
+measurement finished
+save rows=3160 total=1.17s cumulative: data_generation.save=0.89 seq_file=1.16 pi3diamond=1.17 qutip_enh=1.17
+NuclearOps run_measurement: t0-t3 =  1.1751906871795654

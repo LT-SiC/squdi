@@ -2,7 +2,7 @@ from qtpy import QtCore
 import numpy as np
 import datetime as dt
 import matplotlib.pyplot as plt
-
+import os
 from qudi.core.connector import Connector
 from qudi.core.configoption import ConfigOption
 from qudi.core.module import LogicBase
@@ -12,6 +12,7 @@ from qtpy import QtCore
 from qudi.util.datastorage import TextDataStorage, ImageFormat
 from qudi.util.units import ScaledFloat
 from qudi.util.datafitting import FitContainer, FitConfigurationsModel
+
 class TimeTaggerLogic(LogicBase):
     """ Logic module agreggating multiple hardware switches.
     """
@@ -22,6 +23,7 @@ class TimeTaggerLogic(LogicBase):
     sigCounterDataChanged = QtCore.Signal(object)
     sigCorrDataChanged = QtCore.Signal(object)
     sigHistDataChanged = QtCore.Signal(object)
+    sigDumpSizeChanged = QtCore.Signal(object)
 
     sigUpdate = QtCore.Signal()
     sigNewMeasurement = QtCore.Signal()
@@ -54,6 +56,7 @@ class TimeTaggerLogic(LogicBase):
         """ Initialisation performed during activation of the module.
         """
         self._timetagger = self.timetagger()
+        self.file_write = None
         self._constraints = self._timetagger._constraints
         self.stopRequested = False
 
@@ -76,12 +79,17 @@ class TimeTaggerLogic(LogicBase):
         self._hist_poll_timer.timeout.connect(self.acquire_hist_block, QtCore.Qt.QueuedConnection)
         self._hist_poll_timer.setInterval(50)
 
+        self._dump_poll_timer = QtCore.QTimer()
+        self._dump_poll_timer.setSingleShot(False)
+        self._dump_poll_timer.timeout.connect(self.acquire_dump_size, QtCore.Qt.QueuedConnection)
+        self._dump_poll_timer.setInterval(1000)
+
         self.counter = None
         self.trace_data = {}
         self.counter_params = self._timetagger._counter
         self.hist_params = self._timetagger._hist
         self.corr_params  = self._timetagger._corr
-
+        self.dump_channels = [1,2,3, 5, 8, 6]
         self._recorded_data = None
         self.trace_data = None
         self.corr_data = None
@@ -91,7 +99,10 @@ class TimeTaggerLogic(LogicBase):
     
     def on_deactivate(self):
         self._fit_config = self._fit_config_model.dump_configs()
-        pass
+        self._counter_poll_timer = None
+        self._corr_poll_timer = None
+        self._hist_poll_timer = None
+        self._dump_poll_timer = None
     
     def configure_counter(self, data):
         self.counter_freq, self.counter_length, self.counter_channels, self.counter_toggle, self.display_channel = data['counter']
@@ -203,6 +214,24 @@ class TimeTaggerLogic(LogicBase):
             self.sigHistDataChanged.emit({'hist_data':self.hist_data})
         return
     
+    @QtCore.Slot(bool, str, str)
+    def dump_data(self, do_dump, name_tag, save_path):
+        if do_dump:
+            self._dump_poll_timer.start()
+
+            self.file_write = self.timetagger().write_into_file(os.path.join(save_path, 
+                                                            f'{name_tag}.ttbin'),
+                                                            channels=self.dump_channels)
+        else:
+            self._dump_poll_timer.stop()
+            self.file_write = None
+            
+
+    def acquire_dump_size(self):
+        fw = self.file_write
+        memory_used = fw.getTotalSize() if fw is not None else 0
+        self.sigDumpSizeChanged.emit(memory_used)   
+
     @QtCore.Slot()
     def _save_recorded_data(self, to_file=True, name_tag='', save_figure=True, save_type='counter', save_path='Default'):
         """ Save the data and writes it to a file.
@@ -213,18 +242,22 @@ class TimeTaggerLogic(LogicBase):
 
         @return dict parameters: Dictionary which contains the saving parameters
         """
-
+        if save_type is None:
+            save_type='counter'
         self._recorded_data = {'counter': self.trace_data, 'corr': self.corr_data, 'hist': self.hist_data}[save_type]
+        
         if not self._recorded_data:
             self.log.error('No data has been recorded. Save to file failed.')
             return np.empty(0), dict()
+        #FIX
         
-        data_arr = np.array([self._recorded_data[1]])
         if save_type == 'counter':
             data_arr = []
             for ch in self.toggled_channels:
                 data_arr.append(np.nan_to_num(self._recorded_data[ch][1]))
             data_arr = np.array(data_arr)
+        else:
+            data_arr = np.array([self._recorded_data[1]])
         if data_arr.size == 0:
             self.log.error('No data has been recorded. Save to file failed.')
             return np.empty(0), dict()
