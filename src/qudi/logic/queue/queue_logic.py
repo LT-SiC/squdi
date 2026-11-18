@@ -356,6 +356,7 @@ class QueueLogic(LogicBase):
         
 
     def on_activate(self):
+        print("Activating queuelogic")
         # crucial modules
         self._awg                       = self.mcas_dict_holder()
         self._tt                        = self.transition_tracker()

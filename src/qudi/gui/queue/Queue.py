@@ -60,16 +60,27 @@ class QueueGui(GuiBase):
     available as attributes on this wrapper.
     """
     # Connect to the Queue.
-    odmr_refocus_logic = Connector(interface="ODMRRefocuser") # needed such that the refocuser can be used in the queue. The refocuser is not used in the GUI, but it is needed for the queue to work properly.
+    odmr_refocus_logic = Connector(interface="ODMRRefocuser", optional = True) # needed such that the refocuser can be used in the queue. The refocuser is not used in the GUI, but it is needed for the queue to work properly.
     queue_logic = Connector(interface="QueueLogic")
     scripts_folder=StatusVar('scripts_folder', QUDI_DIR + "/notebooks/UserScripts")
     
+    def _optional_module(self, name):
+        """Return the connected module, or None (with a warning) if it is not in the config."""
+        try:
+            module = getattr(self, name)()
+        except Exception:
+            module = None
+        if module is None:
+            self.log.warning("Optional module '{}' is not connected in the config; "
+                            "scripts that need it will not work.".format(name))
+        return module
+    
     def on_activate(self):
         self._win = QtWidgets.QMainWindow()
-        self._win.setWindowTitle("QueueLogic")
+        self._win.setWindowTitle("qudi: Queue")
         self._win.resize(1100, 650)
         self._mw = self._win
-        #self._odmr_refocuser_logic = self.odmr_refocuser_logic() # 
+        self._odmr_refocuser = self._optional_module(self.odmr_refocus_logic())
         self._queue_logic = self.queue_logic()
         self._init_ui()
         self._connect_signals()
@@ -83,6 +94,11 @@ class QueueGui(GuiBase):
         print("Manual pause:",value)
         if hasattr(self._queue_logic,"cun"):
             self._queue_logic.cun.manual_pause=value
+
+    def _abort_odmr_refocus(self):
+        abort = self._odmr_refocuser._abort
+        if abort is not None:
+            abort.set()
 
     # --- convenience API that mirrors the real QMainWindow ---
     def show(self):
@@ -116,7 +132,18 @@ class QueueGui(GuiBase):
         row1.addWidget(self.refresh_btn)
         v.addLayout(row1)
 
-        # --- Row 2: script selection + add button ---
+        # --- Manual ODMR refocus controls ---
+        if self._odmr_refocuser is not None:
+            refocus_row = QtWidgets.QHBoxLayout()
+            self.refocus_btn = QtWidgets.QPushButton("Refocus ODMR now")
+            self.abort_refocus_btn = QtWidgets.QPushButton("Abort ODMR refocus")
+            refocus_row.addWidget(self.refocus_btn)
+            refocus_row.addWidget(self.abort_refocus_btn)
+            v.addLayout(refocus_row)
+            self.refocus_btn.clicked.connect(self._odmr_refocuser.refocus_now)
+            self.abort_refocus_btn.clicked.connect(self._abort_odmr_refocus)
+
+        # --- Row 3: script selection + add button ---
         row2 = QtWidgets.QHBoxLayout()
         self.file_combo = QtWidgets.QComboBox()
         self.file_combo.setMinimumHeight(35)
@@ -132,6 +159,9 @@ class QueueGui(GuiBase):
         self.queue_table = QtWidgets.QTableWidget(0, 7)
         self.queue_table.setHorizontalHeaderLabels(
             ["Name", "Status", "Actions", "Start Time", "End Time", "Exec Time (s)", "ID"]
+        )
+        self.queue_table.horizontalHeader().setSectionResizeMode(
+            0, QtWidgets.QHeaderView.ResizeMode.Stretch
         )
         self.queue_table.setColumnHidden(6, True)
         self.queue_table.verticalHeader().setVisible(False)
