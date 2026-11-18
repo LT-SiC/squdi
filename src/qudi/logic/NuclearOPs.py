@@ -491,7 +491,6 @@ class NuclearOPs(DataGeneration):
                     self.setup_rf(self.current_iterator_df, hashed = self.hashed) #MCAS is ready
                     
                     if abort.is_set(): break
-                    
                     if self.raw_clicks_processing:
                         self.data.set_observations(pd.concat([self.df_refocus_pos.iloc[-1:, :]]*self.number_of_simultaneous_measurements).reset_index(drop=True))
                         self.data.set_observations([OrderedDict(ple_A1=self.queue._tt.ple_A1)]*self.number_of_simultaneous_measurements)
@@ -567,7 +566,6 @@ class NuclearOPs(DataGeneration):
                         pass
                     else:
                         self.data.set_observations([OrderedDict(trace=self.ana_trace.trace)]*self.number_of_simultaneous_measurements)
-
                     # # print('type(self.ana_trace.trace) ', type(self.ana_trace.trace))
                     # # print('self.ana_trace.trace.dtype ', self.ana_trace.trace.dtype)
 
@@ -648,9 +646,11 @@ class NuclearOPs(DataGeneration):
                 if hasattr(self, '_pld'):
                     self.pld.new_data_arrived()
                 if abort.is_set(): break
-               
+
+               # The save is happening here
+                t0 = time.time()
                 self.save()
-               
+                print('NuclearOps run_measurement: t0-t3 = ', time.time()-t0)
                 #end of for
                 # print("end of for")
                 
@@ -1080,14 +1080,14 @@ class NuclearOPs(DataGeneration):
         delta_t = time.time() - self.last_odmr
         if self.odmr_interval != 0 and (delta_t >= self.odmr_interval) or len(self.data.df) == 0 or initial_odmr:
             if check_odmr_frequency_drift_ok and hasattr(self, 'maximum_odmr_drift'):
-                current_L = self.queue.tt.mw_mixing_frequency_L
-                current_C = self.queue.tt.mw_mixing_frequency_C
-                current_R = self.queue.tt.mw_mixing_frequency_R
+                current_L = self.queue._tt.mw_mixing_frequency_L
+                current_C = self.queue._tt.mw_mixing_frequency_C
+                current_R = self.queue._tt.mw_mixing_frequency_R
                 self.add_odmr_script_to_queue(abort, self.odmr_pd)
                 # Is this calculated correctly?
-                current_drift_L = np.round(np.abs(current_L - self.queue.tt.mw_mixing_frequency_L),3)
-                current_drift_C = np.round(np.abs(current_C - self.queue.tt.mw_mixing_frequency_C),3)
-                current_drift_R = np.round(np.abs(current_R - self.queue.tt.mw_mixing_frequency_R),3)
+                current_drift_L = np.round(np.abs(current_L - self.queue._tt.mw_mixing_frequency_L),3)
+                current_drift_C = np.round(np.abs(current_C - self.queue._tt.mw_mixing_frequency_C),3)
+                current_drift_R = np.round(np.abs(current_R - self.queue._tt.mw_mixing_frequency_R),3)
                 print("Current odmr drift:", current_drift_L)
                 if (current_drift_L > self.maximum_odmr_drift) or (current_drift_C > self.maximum_odmr_drift) or (current_drift_R > self.maximum_odmr_drift):
                     logging.getLogger().info("Too much drift ({}, {}, {} > {}), trying again!".format(current_drift_L,current_drift_C,current_drift_R, self.maximum_odmr_drift))
@@ -1394,16 +1394,20 @@ class NuclearOPs(DataGeneration):
 
     def save(self):
         if len(self.iterator_df_done) > 0 and not(hasattr(self, 'do_save') and not self.do_save):
-            Thread1= threading.Thread(target=super().save, kwargs={"notify": False})
+            t0 = time.time(); t = {}
+            Thread1 = threading.Thread(target=super().save, kwargs={"notify": True})  # notify=True prints the inner timings
             Thread1.start()
-            #super(NuclearOPs, self).save(notify=False) #### IMPORTANT
             Thread1.join()
+            t['data_generation.save'] = time.time() - t0
             self.save_sequence_file()
+            t['seq_file'] = time.time() - t0
             self.queue.save_pi3diamond(destination_dir=self.save_dir)
+            t['pi3diamond'] = time.time() - t0
             save_qutip_enhanced(destination_dir=self.save_dir)
-            #TODO
-            # has to switch to qudi log. logging.getLogger().info("saved nuclear to '{} ({:.3f})".format(self.save_dir, time.time() - t0))
-
+            t['qutip_enh'] = time.time() - t0
+            print("save rows={} total={:.2f}s cumulative: {}".format(
+                len(self.iterator_df_done), t['qutip_enh'],
+                " ".join("{}={:.2f}".format(k, v) for k, v in t.items())))
     def save_sequence_file(self):
         seq_message = []
         for key in self._md[self.mcas.name].sequences.keys():
@@ -1427,7 +1431,7 @@ class NuclearOPs(DataGeneration):
                     fp.write('\n-------------------------------------------------------------------\n')
 
             print("call from queue")
-            self.queue.tt.register.save_to_hdf(os.path.join(self.save_dir,"register.hdf"))
+            self.queue._tt.register.save_to_hdf(os.path.join(self.save_dir,"register.hdf"))
 
     def reset_settings(self):
         """

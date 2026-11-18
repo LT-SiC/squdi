@@ -1,0 +1,16 @@
+SAVING TO: C:/Users/ehess/Desktop/Messungen/NuclearOpsData\29Si5/Transition_calibration/20261118-h12m48s48_Transition_calibration\register.hdf
+save rows=40 total=0.79s cumulative: data_generation.save=0.37 seq_file=0.57 pi3diamond=0.69 qutip_enh=0.79
+NuclearOps run_measurement: t0-t3 =  0.7906968593597412
+getting trace
+measurement finished
+save rows=80 total=0.50s cumulative: data_generation.save=0.33 seq_file=0.50 pi3diamond=0.50 qutip_enh=0.50
+NuclearOps run_measurement: t0-t3 =  0.5020110607147217
+getting trace
+measurement finished
+save rows=120 total=0.55s cumulative: data_generation.save=0.38 seq_file=0.55 pi3diamond=0.55 qutip_enh=0.55
+NuclearOps run_measurement: t0-t3 =  0.5474076271057129
+getting trace
+measurement finished
+save rows=160 total=0.72s cumulative: data_generation.save=0.50 seq_file=0.72 pi3diamond=0.72 qutip_enh=0.72
+NuclearOps run_measurement: t0-t3 =  0.7196722030639648
+getting trace

@@ -649,7 +649,7 @@ class SSR(object):
             else:
                 ms_transition = 'L'
 
-            self.rp = self.queue.tt.rabi_parameters['e_rabi_ou{:.0f}deg{}-{}'.format(
+            self.rp = self.queue._tt.rabi_parameters['e_rabi_ou{:.0f}deg{}-{}'.format(
                 self.queue._awg.mcas_dict.awgs['2g'].ch[1].output_amplitude*1000, #TODO
                 self.mixer_deg,
                 ms_transition

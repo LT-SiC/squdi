@@ -290,7 +290,7 @@ class DataGeneration:
             self.pld.save_plot("{}/plot.png".format(self.save_dir), notify=notify)
             t.append(time.time() - t0)
             if notify:
-                logging.getLogger().info("saved {} to '{} ()".format(name, self.save_dir, " ".join("{:.2f}".format(x) for x in t)))
+                logging.getLogger().info("saved {} to '{} ({})".format(name, self.save_dir, " ".join("{:.2f}".format(x) for x in t)))
 
     def remeasure(self, df):
         indices = self.data.df[self.data.df.loc[:, self.data.parameter_names].isin(df).all(axis=1)].index  # get indices in self.df.data to be replaced

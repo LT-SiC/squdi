@@ -123,6 +123,7 @@ class ODMRRefocuser(LogicBase):
         self._windows_previous = []               # of the refocus before
 
     def on_activate(self):
+        print("ACTIVATE ODMRRefocuser")
         self._q = self.queue_logic()
         self._interval = float(self._odmr_refocus_interval)
         self._ranges = [(float(span), float(step)) for span, step in (self._odmr_refocus_ranges or self.DEFAULT_RANGES)]

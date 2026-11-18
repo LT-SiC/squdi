@@ -60,6 +60,7 @@ class QueueGui(GuiBase):
     available as attributes on this wrapper.
     """
     # Connect to the Queue.
+    odmr_refocus_logic = Connector(interface="ODMRRefocuser") # needed such that the refocuser can be used in the queue. The refocuser is not used in the GUI, but it is needed for the queue to work properly.
     queue_logic = Connector(interface="QueueLogic")
     scripts_folder=StatusVar('scripts_folder', QUDI_DIR + "/notebooks/UserScripts")
     
@@ -68,6 +69,7 @@ class QueueGui(GuiBase):
         self._win.setWindowTitle("QueueLogic")
         self._win.resize(1100, 650)
         self._mw = self._win
+        #self._odmr_refocuser_logic = self.odmr_refocuser_logic() # 
         self._queue_logic = self.queue_logic()
         self._init_ui()
         self._connect_signals()

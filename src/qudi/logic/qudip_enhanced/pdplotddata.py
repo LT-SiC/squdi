@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, Signal
 import pyqtgraph as pg
 #TODO add pyqtgraph.
 from .util import printexception
-from . import pddata
+from . import pddata_new
 from .qtgui import gui_helpers
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -312,7 +312,7 @@ class PlotData(gui_helpers.WithQt):
     @printexception
     def set_data(self, **kwargs):
         if 'path' in kwargs:
-            self.data = pddata.Data(iff=kwargs['path'])
+            self.data = pddata_new.Data(iff=kwargs['path'])
         elif 'data' in kwargs:
             self.data = kwargs['data']
         if hasattr(self.data, 'filepath'):
@@ -386,8 +386,8 @@ class PlotData(gui_helpers.WithQt):
             return
         other = pd.DataFrame(list(itertools.product(*self.parameter_table.selected_data.values())))
         other.rename(columns=collections.OrderedDict([(key, val) for key, val in enumerate(self.parameter_table.selected_data.keys())]), inplace=True)
-        data = pddata.Data(parameter_names=self.data.parameter_names, observation_names=self.observation_list.selected_data)
-        data._df = pddata.df_access(self.data.df[self.data.parameter_names + self.observation_list.selected_data], other)
+        data = pddata_new.Data(parameter_names=self.data.parameter_names, observation_names=self.observation_list.selected_data)
+        data._df = pddata_new.df_access(self.data.df[self.data.parameter_names + self.observation_list.selected_data], other)
         if self.subtract_parameter_list.selected_value != '__none__':
             data.subtract_parameter(self.subtract_parameter_list.selected_value, observation_names=self.observation_list.selected_data)
         for pn in self.average_parameter_list.selected_data:
@@ -433,7 +433,7 @@ class PlotData(gui_helpers.WithQt):
                             raise Exception('Error: invalid custom_params {} for fit. Key {} not found'.format(self.custom_params, key))
                         params[key] = val
                     if idx == 0 and idx_obs == 0:
-                        data_fit_results = pddata.Data(parameter_names=pnl + ['observation_name'],
+                        data_fit_results = pddata_new.Data(parameter_names=pnl + ['observation_name'],
                                                        observation_names=['fit_result'],
                                                        dtypes={'fit_result': 'object'})
                         data_fit_results.init()

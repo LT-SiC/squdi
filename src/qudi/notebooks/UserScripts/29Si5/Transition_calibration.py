@@ -29,7 +29,7 @@ def ret_ret_mcas(pdc):
         for idx, _I_ in current_iterator_df.iterrows():
             for t in ['L','C','R']:
                 for i in [1,2]:
-                    trans[t+str(i)] = self.queue.tt.mfl(td={self.queue._transition_tracker.si29_list[0]:[-0.5,0.5]}, ms_trans=t)[i-1]
+                    trans[t+str(i)] = self.queue._tt.mfl(td={self.queue._tt.si29_list[0]:[-0.5,0.5]}, ms_trans=t)[i-1]
             if 'L' in _I_['trans']:
                 state = 'm12'
             elif 'C' in _I_['trans']:
@@ -74,8 +74,8 @@ def ret_ret_mcas(pdc):
                 pulseshape='sinehermite'
             )
             if 'C' in _I_['trans']:
-                amp_project = self.queue.tt.RP('e_rabi_ou350deg-90-R2', omega=_I_['omega']).amp
-                pi_dur_project = E.round_length_mus_to_x_multiple_ps(self.queue.tt.RP('e_rabi_ou350deg-90-L2', omega=_I_['omega']).pi)
+                amp_project = self.queue._tt.RP('e_rabi_ou350deg-90-R2', omega=_I_['omega']).amp
+                pi_dur_project = E.round_length_mus_to_x_multiple_ps(self.queue._tt.RP('e_rabi_ou350deg-90-L2', omega=_I_['omega']).pi)
                 mcas.asc(length_mus=E.round_length_mus_to_x_multiple_ps(0.256), gateMW = True, name='gateMW')
                 sna.electron_rabi(
                     mcas,
