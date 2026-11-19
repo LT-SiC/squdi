@@ -214,7 +214,8 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
             range_spinbox.setValue(max_range / 100)
             range_spinbox.setSuffix(axis.unit)
             range_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            range_spinbox.setMinimumSize(75, 0)
+            range_spinbox.setMinimumSize(75, range_spinbox.sizeHint().height())
+            range_spinbox.lineEdit().setMinimumWidth(range_spinbox.minimumWidth())
             range_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                         QtWidgets.QSizePolicy.Preferred)
 
@@ -224,7 +225,8 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
             res_spinbox.setValue(axis.min_resolution)
             res_spinbox.setSuffix(' px')
             res_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            res_spinbox.setMinimumSize(50, 0)
+            res_spinbox.setMinimumSize(75, res_spinbox.sizeHint().height())
+            res_spinbox.lineEdit().setMinimumWidth(res_spinbox.minimumWidth())
             res_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                       QtWidgets.QSizePolicy.Preferred)
 
@@ -234,7 +236,8 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
             freq_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
             freq_spinbox.setSuffix('Hz')
             freq_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            freq_spinbox.setMinimumSize(75, 0)
+            freq_spinbox.setMinimumSize(75, freq_spinbox.sizeHint().height())
+            freq_spinbox.lineEdit().setMinimumWidth(freq_spinbox.minimumWidth())
             freq_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                        QtWidgets.QSizePolicy.Preferred)
 

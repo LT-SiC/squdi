@@ -39,3 +39,4 @@ ok.py
 **/config
 
 
+/src/qudi/log/single_values

@@ -38,10 +38,10 @@ class ScannerSettingDialog(QtWidgets.QDialog):
 
         self.settings_widget = ScannerSettingsWidget(scanner_axes=scanner_axes,
                                                      scanner_constraints=scanner_constraints)
-        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok |
-                                                     QtWidgets.QDialogButtonBox.Cancel |
-                                                     QtWidgets.QDialogButtonBox.Apply,
-                                                     QtCore.Qt.Horizontal,
+        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok |
+                                                     QtWidgets.QDialogButtonBox.StandardButton.Cancel |
+                                                     QtWidgets.QDialogButtonBox.StandardButton.Apply,
+                                                     QtCore.Qt.Orientation.Horizontal,
                                                      self)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
@@ -49,7 +49,7 @@ class ScannerSettingDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.settings_widget)
         layout.addWidget(self.button_box)
-        layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+        layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
         self.setLayout(layout)
         return
 
@@ -74,12 +74,12 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
 
         label = QtWidgets.QLabel('Forward')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 1)
 
         label = QtWidgets.QLabel('Backward')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 2)
 
         for index, axis in enumerate(scanner_axes, 1):
@@ -87,27 +87,30 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
             label = QtWidgets.QLabel('{0}-Axis:'.format(ax_name.title()))
             label.setObjectName('{0}_axis_label'.format(ax_name))
             label.setFont(font)
-            label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
 
             forward_spinbox = ScienDSpinBox()
             forward_spinbox.setObjectName('{0}_forward_scienDSpinBox'.format(ax_name))
             forward_spinbox.setRange(*axis.frequency_range)
             forward_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
             forward_spinbox.setSuffix('Hz')
-            forward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            forward_spinbox.setMinimumSize(75, 0)
-            forward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                          QtWidgets.QSizePolicy.Preferred)
+            forward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            forward_spinbox.setMinimumSize(75, forward_spinbox.sizeHint().height())
+            # Qudi's global QSS leaves NoButtons editors at 1 px without an explicit minimum.
+            forward_spinbox.lineEdit().setMinimumWidth(forward_spinbox.minimumWidth())
+            forward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                          QtWidgets.QSizePolicy.Policy.Preferred)
 
             backward_spinbox = ScienDSpinBox()
             backward_spinbox.setObjectName('{0}_backward_scienDSpinBox'.format(ax_name))
             backward_spinbox.setRange(*axis.frequency_range)
             backward_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
             backward_spinbox.setSuffix('Hz')
-            backward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            backward_spinbox.setMinimumSize(75, 0)
-            backward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                           QtWidgets.QSizePolicy.Preferred)
+            backward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            backward_spinbox.setMinimumSize(75, backward_spinbox.sizeHint().height())
+            backward_spinbox.lineEdit().setMinimumWidth(backward_spinbox.minimumWidth())
+            backward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                           QtWidgets.QSizePolicy.Policy.Preferred)
             if not self._backscan_configurable:
                 backward_spinbox.setRange(0, 1)
                 backward_spinbox.setValue(0.)
@@ -149,7 +152,7 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
 
             label = QtWidgets.QLabel(axis.name.title())
             label.setFont(font)
-            label.setAlignment(QtCore.Qt.AlignCenter)
+            label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
             layout_shift.addWidget(label, index, 0)
 
             shift_spinbox = ScienDSpinBox()
@@ -157,10 +160,11 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
             shift_spinbox.setRange(*axis.value_range)
             shift_spinbox.setValue(0)
             shift_spinbox.setSuffix('m')
-            shift_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            shift_spinbox.setMinimumSize(75, 0)
-            shift_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                            QtWidgets.QSizePolicy.Preferred)
+            shift_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            shift_spinbox.setMinimumSize(75, shift_spinbox.sizeHint().height())
+            shift_spinbox.lineEdit().setMinimumWidth(shift_spinbox.minimumWidth())
+            shift_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                            QtWidgets.QSizePolicy.Policy.Preferred)
             layout_shift.addWidget(shift_spinbox, index, 1)
 
             # Remember widgets references for later access

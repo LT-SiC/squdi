@@ -95,7 +95,8 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
             forward_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
             forward_spinbox.setSuffix('Hz')
             forward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            forward_spinbox.setMinimumSize(75, 0)
+            forward_spinbox.setMinimumSize(75, forward_spinbox.sizeHint().height())
+            forward_spinbox.lineEdit().setMinimumWidth(forward_spinbox.minimumWidth())
             forward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                           QtWidgets.QSizePolicy.Preferred)
 
@@ -105,7 +106,8 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
             backward_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
             backward_spinbox.setSuffix('Hz')
             backward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            backward_spinbox.setMinimumSize(75, 0)
+            backward_spinbox.setMinimumSize(75, backward_spinbox.sizeHint().height())
+            backward_spinbox.lineEdit().setMinimumWidth(backward_spinbox.minimumWidth())
             backward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                            QtWidgets.QSizePolicy.Preferred)
             if not self._backscan_configurable:
@@ -158,7 +160,8 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
             shift_spinbox.setValue(0)
             shift_spinbox.setSuffix('m')
             shift_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            shift_spinbox.setMinimumSize(75, 0)
+            shift_spinbox.setMinimumSize(75, shift_spinbox.sizeHint().height())
+            shift_spinbox.lineEdit().setMinimumWidth(shift_spinbox.minimumWidth())
             shift_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                             QtWidgets.QSizePolicy.Preferred)
             layout_shift.addWidget(shift_spinbox, index, 1)
@@ -197,7 +200,8 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
             start_scan_spinbox.setValue(0)
             start_scan_spinbox.setSuffix('m')
             start_scan_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            start_scan_spinbox.setMinimumSize(75, 0)
+            start_scan_spinbox.setMinimumSize(75, start_scan_spinbox.sizeHint().height())
+            start_scan_spinbox.lineEdit().setMinimumWidth(start_scan_spinbox.minimumWidth())
             start_scan_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
                                             QtWidgets.QSizePolicy.Preferred)
             layout_scan_range.addWidget(start_scan_spinbox, index, 2)

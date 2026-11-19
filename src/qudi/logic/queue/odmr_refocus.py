@@ -145,7 +145,10 @@ class ODMRRefocuser(LogicBase):
         last = self.get_last_refocus_time()
         if last is None:
             last = time.time()
-        self._next_due = last + (0.0 if self._odmr_refocus_on_activation else self._interval)
+        if self._odmr_refocus_on_activation:
+            self._next_due = last
+        else:
+            self._next_due = time.time() + self._interval
 
         self._q.register_odmr_refocuser(self)     # the queue calls run_if_due between two scripts
         if self._interval > 0:

@@ -40,10 +40,10 @@ class OptimizerSettingDialog(QtWidgets.QDialog):
         self.settings_widget = OptimizerSettingWidget(scanner_axes=scanner_axes,
                                                       scanner_channels=scanner_channels)
 
-        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok |
-                                                     QtWidgets.QDialogButtonBox.Cancel |
-                                                     QtWidgets.QDialogButtonBox.Apply,
-                                                     QtCore.Qt.Horizontal,
+        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok |
+                                                     QtWidgets.QDialogButtonBox.StandardButton.Cancel |
+                                                     QtWidgets.QDialogButtonBox.StandardButton.Apply,
+                                                     QtCore.Qt.Orientation.Horizontal,
                                                      self)
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
@@ -51,7 +51,7 @@ class OptimizerSettingDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.settings_widget)
         layout.addWidget(self.button_box)
-        layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+        layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
         self.setLayout(layout)
 
     @property
@@ -85,7 +85,7 @@ class OptimizerSettingWidget(QtWidgets.QWidget):
         self.optimize_sequence_combobox.addItems(str(seq) for seq in self.available_opt_sequences)
 
         label = QtWidgets.QLabel('Data channel:')
-        label.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignVCenter | QtCore.Qt.AlignmentFlag.AlignRight)
         label.setFont(font)
         misc_settings_groupbox = QtWidgets.QGroupBox('General settings')
         misc_settings_groupbox.setFont(font)
@@ -95,7 +95,7 @@ class OptimizerSettingWidget(QtWidgets.QWidget):
         misc_settings_groupbox.layout().setColumnStretch(1, 1)
 
         label_opt_seq = QtWidgets.QLabel('Sequence:')
-        label_opt_seq.setAlignment(QtCore.Qt.AlignLeft)
+        label_opt_seq.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft)
         label_opt_seq.setFont(font)
         self.axes_widget = OptimizerAxesWidget(scanner_axes=scanner_axes)
         self.axes_widget.setObjectName('optimizer_axes_widget')
@@ -164,17 +164,17 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
 
         label = QtWidgets.QLabel('Range')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 1)
 
         label = QtWidgets.QLabel('Resolution')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 2)
 
         label = QtWidgets.QLabel('Frequency')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 3)
 
         for index, axis in enumerate(scanner_axes, 1):
@@ -182,7 +182,7 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
             label = QtWidgets.QLabel('{0}-Axis:'.format(ax_name.title()))
             label.setObjectName('{0}_axis_label'.format(ax_name))
             label.setFont(font)
-            label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
 
             max_range = abs(axis.max_value - axis.min_value)
             range_spinbox = ScienDSpinBox()
@@ -190,30 +190,34 @@ class OptimizerAxesWidget(QtWidgets.QWidget):
             range_spinbox.setRange(0, max_range)
             range_spinbox.setValue(max_range / 100)
             range_spinbox.setSuffix(axis.unit)
-            range_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            range_spinbox.setMinimumSize(75, 0)
-            range_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                        QtWidgets.QSizePolicy.Preferred)
+            range_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            range_spinbox.setMinimumSize(75, range_spinbox.sizeHint().height())
+            # Qudi's global QSS leaves NoButtons editors at 1 px without an explicit minimum.
+            range_spinbox.lineEdit().setMinimumWidth(range_spinbox.minimumWidth())
+            range_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                        QtWidgets.QSizePolicy.Policy.Preferred)
 
             res_spinbox = QtWidgets.QSpinBox()
             res_spinbox.setObjectName('{0}_resolution_spinBox'.format(ax_name))
             res_spinbox.setRange(axis.min_resolution, min(2 ** 31 - 1, axis.max_resolution))
             res_spinbox.setValue(axis.min_resolution)
             res_spinbox.setSuffix(' px')
-            res_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            res_spinbox.setMinimumSize(50, 0)
-            res_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                      QtWidgets.QSizePolicy.Preferred)
+            res_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            res_spinbox.setMinimumSize(50, res_spinbox.sizeHint().height())
+            res_spinbox.lineEdit().setMinimumWidth(res_spinbox.minimumWidth())
+            res_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                      QtWidgets.QSizePolicy.Policy.Preferred)
 
             freq_spinbox = ScienDSpinBox()
             freq_spinbox.setObjectName('{0}_frequency_scienDSpinBox'.format(ax_name))
             freq_spinbox.setRange(*axis.frequency_range)
             freq_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
             freq_spinbox.setSuffix('Hz')
-            freq_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            freq_spinbox.setMinimumSize(75, 0)
-            freq_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                       QtWidgets.QSizePolicy.Preferred)
+            freq_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            freq_spinbox.setMinimumSize(75, freq_spinbox.sizeHint().height())
+            freq_spinbox.lineEdit().setMinimumWidth(freq_spinbox.minimumWidth())
+            freq_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                       QtWidgets.QSizePolicy.Policy.Preferred)
 
             # Add to layout
             layout.addWidget(label, index, 0)

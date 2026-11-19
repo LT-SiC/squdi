@@ -61,7 +61,7 @@ class AxesControlWidget(QtWidgets.QWidget):
 
     def __init__(self, *args, scanner_axes, **kwargs):
         super().__init__(*args, **kwargs)
-
+        QtWidgets.QApplication.setStyle("Fusion")
         self.axes_widgets = dict()
 
         font = QtGui.QFont()
@@ -70,27 +70,27 @@ class AxesControlWidget(QtWidgets.QWidget):
 
         label = QtWidgets.QLabel('Resolution')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 1)
 
         vline = QtWidgets.QFrame()
-        vline.setFrameShape(QtWidgets.QFrame.VLine)
-        vline.setFrameShadow(QtWidgets.QFrame.Sunken)
+        vline.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        vline.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         layout.addWidget(vline, 0, 2, len(scanner_axes) + 1, 1)
 
         label = QtWidgets.QLabel('Scan Range')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 3, 1, 2)
 
         vline = QtWidgets.QFrame()
-        vline.setFrameShape(QtWidgets.QFrame.VLine)
-        vline.setFrameShadow(QtWidgets.QFrame.Sunken)
+        vline.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+        vline.setFrameShadow(QtWidgets.QFrame.Shadow.Sunken)
         layout.addWidget(vline, 0, 5, len(scanner_axes) + 1, 1)
 
         label = QtWidgets.QLabel('Current Target')
         label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
+        label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label, 0, 7)
 
         for index, axis in enumerate(scanner_axes, 1):
@@ -98,41 +98,51 @@ class AxesControlWidget(QtWidgets.QWidget):
             label = QtWidgets.QLabel('{0}-Axis:'.format(ax_name.title()))
             label.setObjectName('{0}_axis_label'.format(ax_name))
             label.setFont(font)
-            label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            label.setAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
 
             res_spinbox = QtWidgets.QSpinBox()
             res_spinbox.setObjectName('{0}_resolution_spinBox'.format(ax_name))
             res_spinbox.setRange(axis.min_resolution, min(2 ** 31 - 1, axis.max_resolution))
             res_spinbox.setValue(axis.min_resolution)
             res_spinbox.setSuffix(' px')
-            res_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            res_spinbox.setMinimumSize(50, 0)
-            res_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                      QtWidgets.QSizePolicy.Preferred)
+            res_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            res_spinbox.setMinimumSize(50, res_spinbox.sizeHint().height())
+            res_spinbox.lineEdit().setMinimumWidth(res_spinbox.minimumWidth())
+            res_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                      QtWidgets.QSizePolicy.Policy.Preferred)
 
             min_spinbox = ScienDSpinBox()
             min_spinbox.setObjectName('{0}_min_range_scienDSpinBox'.format(ax_name))
             min_spinbox.setRange(*axis.value_range)
             min_spinbox.setValue(axis.min_value)
             min_spinbox.setSuffix(axis.unit)
-            min_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            min_spinbox.setMinimumSize(75, 0)
-            min_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                      QtWidgets.QSizePolicy.Preferred)
-
+            min_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            min_spinbox.setMinimumSize(75, min_spinbox.sizeHint().height())
+            min_spinbox.lineEdit().setMinimumWidth(min_spinbox.minimumWidth())
+            min_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                      QtWidgets.QSizePolicy.Policy.Preferred)
+            min_spinbox.setStyleSheet("""
+                QLineEdit {
+                    background-color: white;
+                    color: black;
+                    selection-background-color: #308cc6;
+                    selection-color: white;
+            }
+            """)
             max_spinbox = ScienDSpinBox()
             max_spinbox.setObjectName('{0}_max_range_scienDSpinBox'.format(ax_name))
             max_spinbox.setRange(*axis.value_range)
             max_spinbox.setValue(axis.max_value)
             max_spinbox.setSuffix(axis.unit)
-            max_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            max_spinbox.setMinimumSize(75, 0)
-            max_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                      QtWidgets.QSizePolicy.Preferred)
+            max_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            max_spinbox.setMinimumSize(75, max_spinbox.sizeHint().height())
+            max_spinbox.lineEdit().setMinimumWidth(max_spinbox.minimumWidth())
+            max_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                      QtWidgets.QSizePolicy.Policy.Preferred)
 
             init_pos = (axis.max_value - axis.min_value) / 2 + axis.min_value
 
-            slider = DoubleSlider(QtCore.Qt.Horizontal)
+            slider = DoubleSlider(QtCore.Qt.Orientation.Horizontal)
             slider.setObjectName('{0}_position_doubleSlider'.format(ax_name))
             slider.setRange(*axis.value_range)
             granularity = 2 ** 31 - 1
@@ -142,17 +152,18 @@ class AxesControlWidget(QtWidgets.QWidget):
             slider.set_granularity(granularity)
             slider.setValue(init_pos)
             slider.setMinimumSize(150, 0)
-            slider.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            slider.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
 
             pos_spinbox = ScienDSpinBox()
             pos_spinbox.setObjectName('{0}_position_scienDSpinBox'.format(ax_name))
             pos_spinbox.setRange(*axis.value_range)
             pos_spinbox.setValue(init_pos)
             pos_spinbox.setSuffix(axis.unit)
-            pos_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            pos_spinbox.setMinimumSize(75, 0)
-            pos_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                      QtWidgets.QSizePolicy.Preferred)
+            pos_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons)
+            pos_spinbox.setMinimumSize(75, pos_spinbox.sizeHint().height())
+            pos_spinbox.lineEdit().setMinimumWidth(pos_spinbox.minimumWidth())
+            pos_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred,
+                                      QtWidgets.QSizePolicy.Policy.Preferred)
             pos_spinbox.dynamic_precision = False
 
             # Add to layout

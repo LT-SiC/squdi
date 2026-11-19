@@ -191,7 +191,7 @@ class PLEScannerLogic(ScanningProbeLogic):
         # if not isinstance(self._scan_frequency, dict):
         #     self._scan_frequency = {ax.name: ax.max_frequency for ax in constr.axes.values()}
 
-        self.sigRepeatScan.connect(self.toggle_scan, QtCore.Qt.QueuedConnection)
+        self.sigRepeatScan.connect(self.toggle_scan, QtCore.Qt.ConnectionType.QueuedConnection)
         self.__scan_poll_interval = 100
         self.__scan_stop_requested = True
         self._curr_caller_id = self.module_uuid
@@ -207,7 +207,7 @@ class PLEScannerLogic(ScanningProbeLogic):
 
         self.__scan_poll_timer = QtCore.QTimer()
         self.__scan_poll_timer.setSingleShot(True)
-        self.__scan_poll_timer.timeout.connect(self.__scan_poll_loop, QtCore.Qt.QueuedConnection)
+        self.__scan_poll_timer.timeout.connect(self.__scan_poll_loop, QtCore.Qt.ConnectionType.QueuedConnection)
         self.load_latest_frequency_calibration()
 
         return
