@@ -442,6 +442,17 @@ class Data:
             df_save = _cellwise(df_save, str)   # remaining cells (scalars) as str, exactly as before
             t0 = time.time()
             t = []
+            saved_path = getattr(self, '_hdf_saved_path', None)
+            saved_df = getattr(self, '_hdf_saved_df', None)
+            file_state = self._hdf_file_state(filepath) if os.path.exists(filepath) else None
+            can_append = (
+                saved_path == os.path.normcase(os.path.abspath(filepath))
+                and file_state == getattr(self, '_hdf_saved_file_state', None)
+                and isinstance(saved_df, pd.DataFrame)
+                and len(df_save) >= len(saved_df)
+                and df_save.columns.equals(saved_df.columns)
+                and df_save.iloc[:len(saved_df)].equals(saved_df)
+            )
             if not self.hdf_lock.acquire(False):
                 print('Trying to save data to hdf.')
                 print('Waiting for hdf_lock..')
@@ -451,7 +462,13 @@ class Data:
                 t.append(time.time() - t0)
                 store = pd.HDFStore(filepath)
                 try:
-                    store.put('df', df_save, format='table')
+                    storer = store.get_storer('df') if can_append and '/df' in store else None
+                    if storer is not None and self._hdf_can_append(storer, len(saved_df), df_save.iloc[len(saved_df):]):
+                        new_rows = df_save.iloc[len(saved_df):]
+                        if len(new_rows) > 0:
+                            store.append('df', new_rows, format='table')
+                    else:
+                        store.put('df', df_save, format='table')
                     for key in ["parameter_names", 'observation_names', 'dtypes']:
                         setattr(store.get_storer('df').attrs, key, getattr(self, key))
                     setattr(store.get_storer('df').attrs, "Datatypes", dict(self.df.dtypes))
@@ -463,14 +480,17 @@ class Data:
             finally:
                 self.hdf_lock.release()
             t.append(time.time() - t0)
-            # ptrepack rewrites the whole file in a subprocess while holding hdf_lock -> do it rarely, not after every save.
+            # ptrepack rewrites the whole file while holding hdf_lock; avoid doing this often during measurements.
             if not hasattr(self, '_last_repack'):
                 self._last_repack = time.time()
-            if time.time() - self._last_repack > getattr(self, 'repack_interval_s', 600.):
+            if time.time() - self._last_repack > getattr(self, 'repack_interval_s', 3600.):
                 self._last_repack = time.time()
                 ptrepack_thread(file=os.path.split(filepath)[1], folder=os.path.split(filepath)[0], lock=self.hdf_lock)
             t.append(time.time() - t0)
             self.filepath = filepath
+            self._hdf_saved_path = os.path.normcase(os.path.abspath(filepath))
+            self._hdf_saved_df = df_save.copy()
+            self._hdf_saved_file_state = self._hdf_file_state(filepath)
             if notify:
                 logging.getLogger().info("hdf data saved in ({})".format(" ".join("{:.2f}".format(x) for x in t)))
                 if hasattr(self, 'save_dur_list'):
@@ -479,6 +499,32 @@ class Data:
                     self.save_dur_list = [sum(t)]
 
     # ---- array columns (traces) ------------------------------------------------------------------------------
+    @staticmethod
+    def _hdf_file_state(filepath):
+        stat = os.stat(filepath)
+        return stat.st_size, stat.st_mtime_ns
+
+    @staticmethod
+    def _hdf_can_append(storer, saved_rows, new_rows):
+        if storer.nrows != saved_rows:
+            return False
+        if len(new_rows) == 0:
+            return True
+        string_widths = []
+        for field in storer.table.dtype.fields.values():
+            field_dtype = field[0]
+            if field_dtype.subdtype is not None:
+                field_dtype = field_dtype.subdtype[0]
+            if field_dtype.kind == 'S':
+                string_widths.append(field_dtype.itemsize)
+        if not string_widths:
+            return False
+        max_width = min(string_widths)
+        return all(
+            len(value.encode('utf-8')) <= max_width
+            for value in new_rows.to_numpy(dtype=object).flat
+        )
+
     @staticmethod
     def _is_array_column(series):
         """True if the column holds 1-d numeric numpy arrays of one common length (unfinished rows may hold anything else)."""
@@ -493,7 +539,8 @@ class Data:
     @staticmethod
     def _array_checksum(M):
         # weighted row sum: cheap, and detects deleted / re-measured / reordered rows (remeasure!)
-        return (M.astype(np.float64) * np.arange(1, M.shape[1] + 1)).sum(axis=1)
+        weights = np.arange(1, M.shape[1] + 1, dtype=np.float64)
+        return np.multiply(M, weights, dtype=np.float64).sum(axis=1)
 
     def _hdf_sync_array_column(self, h5, col):
         """Make node '/arr_<col>' equal to the finished rows of self.df[col], writing only what changed."""

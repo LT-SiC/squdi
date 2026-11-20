@@ -8,6 +8,8 @@ from qudi.gui.ple.ple_repump_widget import PleMicrowaveWidget, PlePulsedWidget
 from qudi.gui.ple.controller_widget import ControllerWidget
 from typing import Tuple
 from typing import Optional
+
+from gui.ple.mcas_widget import McasWidget
 try:
     importlib.reload(ple_data_widget)
 except NameError:
@@ -54,6 +56,8 @@ class PLEScanMainWindow(QtWidgets.QMainWindow):
             setattr(self, f"{name}_widget", PlePulsedWidget(name))
         elif name == "Controller":
             setattr(self, f"{name}_widget", ControllerWidget(name))
+        elif name == "MCAS":
+            setattr(self, f"{name}_widget", McasWidget(name))
         setattr(self, f"{name}_dockWidget", QtWidgets.QDockWidget())
         dockWidget = getattr(self, f"{name}_dockWidget")
         dockWidget.setObjectName(name)

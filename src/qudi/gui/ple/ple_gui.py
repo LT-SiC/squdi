@@ -62,6 +62,7 @@ class PLEScanGui(GuiBase):
     _microwave_logic = Connector(name="microwave", interface="OdmrLogic", optional=True)
     _repump_logic = Connector(name="repump", interface="RepumpInterfuseLogic", optional=True)
     _controller_logic = Connector(name="controller", interface="ControllerInterfuseLogic", optional=True)
+    _mcas_dict_holder = Connector(name="mcas_dict_holder", interface="McasDictHolderInterface", optional=True)
 
     # status vars
     _window_state = StatusVar(name="window_state", default=None)
@@ -182,6 +183,12 @@ class PLEScanGui(GuiBase):
             self._controller_logic.sigGuiParamsUpdated.connect(self._mw.Controller_widget.update_gui, QtCore.Qt.QueuedConnection)
             self._controller_logic.sigGuiParamsUpdated.emit(self._controller_logic.parameters)
 
+        self._mcas_dict_holder = self._mcas_dict_holder()
+        if self._mcas_dict_holder is not None:
+            self._mw.add_dock_widget("MCAS")
+            self._mw.MCAS_widget.sig_mcas_params_updated.connect(self._mcas_dict_holder.params_updated, QtCore.Qt.QueuedConnection)
+            self._mcas_dict_holder.sigGuiParamsUpdated.connect(self._mw.MCAS_widget.update_gui, QtCore.Qt.QueuedConnection)
+            
         # PLE tracking
         self._mw.actionTrackPLE.triggered.connect(
             lambda: self._optimize_logic().toggle_ple_tracking(self._mw.actionTrackPLE.isChecked()),
@@ -322,16 +329,20 @@ class PLEScanGui(GuiBase):
         self._psd.accepted.connect(self.apply_scanner_settings)
         self._psd.rejected.connect(self.restore_scanner_settings)
         self._psd.button_box.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.apply_scanner_settings)
+        self.restore_scanner_settings()
 
     @QtCore.Slot()
     def apply_scanner_settings(self):
         """ToDo: Document"""
         # ToDo: Implement backwards scanning functionality
         forward_freq = {ax: freq[0] for ax, freq in self._psd.settings_widget.frequency.items()}
-        self.sigScanSettingsChanged.emit({"frequency": forward_freq})
-
         shift = {ax: shift for ax, shift in self._psd.settings_widget.shift.items()}
-        self.sigScanSettingsChanged.emit({"shift": shift})
+        self.sigScanSettingsChanged.emit({
+            "frequency": forward_freq,
+            "shift": shift,
+            "range": self._psd.settings_widget.scan_range,
+            "ple_controls": self._psd.settings_widget.controls,
+        })
 
     @QtCore.Slot()
     def change_optimizer_settings(self):
@@ -630,6 +641,11 @@ class PLEScanGui(GuiBase):
                 "frequency": self._scanning_logic.scan_frequency,
                 "resolution": self._scanning_logic.scan_resolution,
                 "range": self._scanning_logic.scan_ranges,
+                "shift": {
+                    axis: scanner_axis.axis_shift
+                    for axis, scanner_axis in self._scanning_logic.scanner_axes.items()
+                },
+                "ple_controls": self._scanning_logic.get_ple_controls(),
             }
         )
 
@@ -646,6 +662,17 @@ class PLEScanGui(GuiBase):
 
         if not isinstance(settings, dict):
             settings = self._scanning_logic.scan_settings
+
+        if hasattr(self, "_psd"):
+            settings_widget = self._psd.settings_widget
+            if "frequency" in settings:
+                settings_widget.set_frequency(settings["frequency"])
+            if "shift" in settings:
+                settings_widget.set_shift(settings["shift"])
+            if "range" in settings:
+                settings_widget.set_scan_range(settings["range"])
+            if "ple_controls" in settings:
+                settings_widget.set_controls(settings["ple_controls"])
 
         # if self._scanner_settings_locked:
         #     return
@@ -693,7 +720,8 @@ class PLEScanGui(GuiBase):
         if "frequency" in settings:
             self._mw.frequencyDoubleSpinBox.setValue(settings["frequency"][self.scan_axis])
 
-        self._scanning_logic.reset_accumulated()
+        if any(key in settings for key in ("range", "resolution", "frequency")):
+            self._scanning_logic.reset_accumulated()
         self._mw.number_of_repeats_SpinBox.setValue(self._scanning_logic._number_of_repeats)
 
     @QtCore.Slot(bool, tuple)

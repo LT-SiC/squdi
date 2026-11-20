@@ -29,6 +29,7 @@ If not, see <https://www.gnu.org/licenses/>.
 #!ValueError: all the input array dimensions for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 50 and the array at index 1 has size 100
 
 import os
+import copy
 from datetime import datetime
 from time import sleep
 
@@ -81,6 +82,7 @@ class PLEScannerLogic(ScanningProbeLogic):
     _scan_ranges = StatusVar(name="scan_ranges", default=None)
     _scan_resolution = StatusVar(name="scan_resolution", default=None)
     _scan_frequency = StatusVar(name="scan_frequency", default=None)
+    _ple_controls = StatusVar(name="ple_controls", default=None)
 
     _number_of_repeats = StatusVar(default=10)
     _repeated = 0
@@ -118,6 +120,7 @@ class PLEScannerLogic(ScanningProbeLogic):
     sigUpdateAccumulated = QtCore.Signal(object, object)
     sigScanningDone = QtCore.Signal()
     sigFrequencyCalibrationUpdated = QtCore.Signal(object)
+    sigInitChargeRequested = QtCore.Signal()
 
     def __init__(self, config, **kwargs):
         super(PLEScannerLogic, self).__init__(config=config, **kwargs)
@@ -164,6 +167,10 @@ class PLEScannerLogic(ScanningProbeLogic):
         self.sigSetScannerTarget.connect(self.set_target_position)
         constr = self.scanner_constraints
         self._channel = list(constr.channels.keys())[0] if self._channel is None else self._channel
+        if self._ple_controls is None:
+            self._ple_controls = self._default_ple_controls()
+        else:
+            self._ple_controls = self._normalize_ple_controls(self._ple_controls)
         self._scan_saved_to_hist = True
         self.log.debug(
             f"Scanner settings at startup, type {type(self._scan_ranges)} {self._scan_ranges, self._scan_resolution}"
@@ -853,9 +860,68 @@ class PLEScannerLogic(ScanningProbeLogic):
                 self.set_scan_resolution(settings["resolution"])
             if "frequency" in settings:
                 self.set_scan_frequency(settings["frequency"])
+            if "shift" in settings:
+                self.set_scan_shift(settings["shift"])
             if "save_to_history" in settings:
                 self._scan_saved_to_hist = settings["save_to_history"]
+            if "ple_controls" in settings:
+                self.set_ple_controls(settings["ple_controls"])
             # self.reset_accumulated()
+
+    @staticmethod
+    def _default_ple_controls():
+        return {
+            "a1": False,
+            "a2": False,
+            "repump": False,
+            "init_charge": False,
+            "microwaves": [],
+        }
+
+    @classmethod
+    def _normalize_ple_controls(cls, settings):
+        if not isinstance(settings, dict):
+            raise TypeError("PLE controls must be provided as a dictionary.")
+
+        controls = cls._default_ple_controls()
+        for key in ("a1", "a2", "repump", "init_charge"):
+            if key in settings:
+                controls[key] = bool(settings[key])
+
+        microwaves = settings.get("microwaves", [])
+        if not isinstance(microwaves, (list, tuple)):
+            raise TypeError("PLE microwave settings must be a list.")
+        for microwave in microwaves:
+            if not isinstance(microwave, dict):
+                raise TypeError("Each PLE microwave setting must be a dictionary.")
+            if "frequency" not in microwave or "amplitude" not in microwave:
+                raise ValueError(
+                    "Each PLE microwave setting needs frequency and amplitude values."
+                )
+            controls["microwaves"].append({
+                "frequency": float(microwave["frequency"]),
+                "amplitude": float(microwave["amplitude"]),
+            })
+        return controls
+
+    @property
+    def ple_controls(self):
+        return self.get_ple_controls()
+
+    def get_ple_controls(self):
+        with self._thread_lock:
+            controls = self._ple_controls
+            if controls is None:
+                controls = self._default_ple_controls()
+            return copy.deepcopy(controls)
+
+    def set_ple_controls(self, settings):
+        controls = self._normalize_ple_controls(settings)
+        with self._thread_lock:
+            self._ple_controls = controls
+            current_controls = copy.deepcopy(self._ple_controls)
+        self.sigScanSettingsChanged.emit({"ple_controls": current_controls})
+        return current_controls
 
     def update_number_of_repeats(self, number_of_repeats):
         self._number_of_repeats = number_of_repeats
@@ -937,6 +1003,8 @@ class PLEScannerLogic(ScanningProbeLogic):
             #                                 line_points / self._scan_frequency[scan_axes[0]])
             self.__scan_poll_timer.setInterval(int(round(self._scan_poll_interval)))  # * 1000)))
             #print("test_2")
+            if self.get_ple_controls()["init_charge"]:
+                self.sigInitChargeRequested.emit()
             if (
                 self._scanner().start_scan() < 0
             ):  # TODO Current interface states that bool is returned from start_scan

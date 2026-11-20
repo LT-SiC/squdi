@@ -26,7 +26,7 @@ from qudi.logic.mcas.settings import McasSettings
 from qudi.logic.mcas.sequence import MultiChSeqDict, make_mcas_class, set_default_settings, clear_default_settings
 
 
-class mcas_dict_holder(LogicBase, McasDictHolderInterface):   # LogicBase first, then the interface (both derive from Base)
+class McasDictHolder(LogicBase, McasDictHolderInterface):
     """Holds the multi channel sequence dict and the connected awg / pulse streamer."""
 
     # connectors

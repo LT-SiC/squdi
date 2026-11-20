@@ -294,7 +294,7 @@ class ScriptQueueList(collections.abc.MutableSequence):
 # ----------------------------
 class QueueLogic(LogicBase):
     # declare connections
-    mcas_dict_holder    = Connector(interface='McasDictHolderInterface')
+    mcas_dict_holder    = Connector(interface='McasDictHolderInterface') # Why not McasDictHolder
     transition_tracker  = Connector(interface = 'TransitionTracker')
     gated_counter       = Connector('GatedCounter')
 

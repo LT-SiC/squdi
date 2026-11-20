@@ -27,13 +27,13 @@ from PySide6 import QtCore
 from qudi.core.statusvariable import StatusVar
 
 class ControllerInterfuseLogic(LogicBase):
-    sigGuiParamsUpdated = QtCore.Signal(object,  QtCore.Qt.QueuedConnection)
-    sigTimingPlotUpdated = QtCore.Signal(object,  QtCore.Qt.QueuedConnection)
-    _switch_name = ConfigOption(name='switcher_name', default=None)
-    _switchlogic = Connector(name='switchlogic', interface="SwitchLogic", optional=True)
-    _power_controller = Connector(name='power_controller', interface="PowerControllerLogic", optional=True)
-    _power_channel = ConfigOption(name='power_channel', default=0)
-    _laser_controller = Connector(name='laser_controller', interface="LaserControllerLogic", optional=True)
+    sigGuiParamsUpdated = QtCore.Signal(object,  QtCore.Qt.ConnectionType.QueuedConnection)
+    sigTimingPlotUpdated = QtCore.Signal(object,  QtCore.Qt.ConnectionType.QueuedConnection)
+    # _switch_name = ConfigOption(name='switcher_name', default=None)
+    # _switchlogic = Connector(name='switchlogic', interface="SwitchLogic", optional=True)
+    # _power_controller = Connector(name='power_controller', interface="PowerControllerLogic", optional=True)
+    # _power_channel = ConfigOption(name='power_channel', default=0)
+    # _laser_controller = Connector(name='laser_controller', interface="LaserControllerLogic", optional=True)
 
 
     default_params = {
@@ -46,17 +46,19 @@ class ControllerInterfuseLogic(LogicBase):
         
     
     def on_activate(self):
-        self._power_controller = self._power_controller()
-        # self.switch = self._switchlogic()
-        if self._power_controller:
-            self.parameters['power'] = self._power_controller._current_positions[self._power_channel]
-            self._power_controller.sig_set_power.connect(self.update_power, QtCore.Qt.QueuedConnection)
+        print('ControllerInterfuseLogic activated')
+        # self._power_controller = self._power_controller()
+        # # self.switch = self._switchlogic()
+        # if self._power_controller:
+        #     self.parameters['power'] = self._power_controller._current_positions[self._power_channel]
+        #     self._power_controller.sig_set_power.connect(self.update_power, QtCore.Qt.ConnectionType.QueuedConnection)
         
     def on_deactivate(self):
-        if self._power_controller:
-            self._power_controller.sig_set_power.disconnect(self.update_power)
-        for i in range(5):
-            QtCore.QCoreApplication.processEvents()
+        print('ControllerInterfuseLogic deactivated')   
+        # if self._power_controller:
+        #     self._power_controller.sig_set_power.disconnect(self.update_power)
+        # for i in range(5): # why this?
+        #     QtCore.QCoreApplication.processEvents()
         
         if self.module_state() != 'idle' and self.module_state() != 'deactivated':
             pass
@@ -64,11 +66,13 @@ class ControllerInterfuseLogic(LogicBase):
 
     @QtCore.Slot(dict)
     def params_updated(self, params):
-        self.parameters['power'] = params['power']
-        print(params['power'])
-        self._power_controller.sig_set_power.emit(params['power'], self._power_channel, False)
+        print('ControllerInterfuseLogic params_updated', params)
+        # self.parameters['power'] = params['power']
+        # print(params['power'])
+        # self._power_controller.sig_set_power.emit(params['power'], self._power_channel, False)
     
     @QtCore.Slot(float, int, bool)
     def update_power(self, power, channel, calibrated):
-        self.parameters['power'] = power
-        self.sigGuiParamsUpdated.emit(self.parameters)
+        print('ControllerInterfuseLogic update_power', power, channel, calibrated)
+        # self.parameters['power'] = power
+        # self.sigGuiParamsUpdated.emit(self.parameters)

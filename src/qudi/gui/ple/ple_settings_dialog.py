@@ -1,221 +1,210 @@
 # -*- coding: utf-8 -*-
 
-"""
-This file contains a custom QWidget class to provide scanner settings that do not need to be
-accessed frequently (in contrast, see: axes_control_widget.py).
+"""Settings dialog for PLE scanner controls."""
 
-Copyright (c) 2021, the qudi developers. See the AUTHORS.md file at the top-level directory of this
-distribution and on <https://github.com/Ulm-IQO/qudi-iqo-modules/>
-
-This file is part of qudi.
-
-Qudi is free software: you can redistribute it and/or modify it under the terms of
-the GNU Lesser General Public License as published by the Free Software Foundation,
-either version 3 of the License, or (at your option) any later version.
-
-Qudi is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-See the GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License along with qudi.
-If not, see <https://www.gnu.org/licenses/>.
-"""
-
-__all__ = ('ScannerSettingDialog', 'ScannerSettingsWidget')
+__all__ = ('PleSettingDialog', 'ScannerSettingsWidget')
 
 from PySide6 import QtCore, QtGui, QtWidgets
 from qudi.util.widgets.scientific_spinbox import ScienDSpinBox
 
 
 class PleSettingDialog(QtWidgets.QDialog):
-    """
-    """
+    """Dialog for infrequently changed PLE scanner settings."""
 
     def __init__(self, scanner_axes, scanner_constraints):
         super().__init__()
         self.setObjectName('scanner_settings_dialog')
         self.setWindowTitle('Scanner Settings')
 
-        self.settings_widget = ScannerSettingsWidget(scanner_axes=scanner_axes,
-                                                     scanner_constraints=scanner_constraints)
-        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok |
-                                                     QtWidgets.QDialogButtonBox.Cancel |
-                                                     QtWidgets.QDialogButtonBox.Apply,
-                                                     QtCore.Qt.Horizontal,
-                                                     self)
+        self.settings_widget = ScannerSettingsWidget(
+            scanner_axes=scanner_axes,
+            scanner_constraints=scanner_constraints,
+        )
+        self.button_box = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel
+            | QtWidgets.QDialogButtonBox.StandardButton.Apply,
+            QtCore.Qt.Horizontal,
+            self,
+        )
         self.button_box.accepted.connect(self.accept)
         self.button_box.rejected.connect(self.reject)
 
-        layout = QtWidgets.QVBoxLayout()
+        layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.settings_widget)
         layout.addWidget(self.button_box)
         layout.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
-        self.setLayout(layout)
-        return
 
 
 class ScannerSettingsWidget(QtWidgets.QWidget):
-    """ Widget containing infrequently used scanner settings
-    """
+    """Widget containing PLE scanner frequency, range, shift, and control settings."""
 
     sigFrequencyChanged = QtCore.Signal(str, float, float)
     sigShiftChanged = QtCore.Signal(str, float)
-    # TODO sigRangeChanged does not exist
 
     def __init__(self, *args, scanner_axes, scanner_constraints, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self.axes_widgets = dict()
+        self.axes_widgets = {}
         self._backscan_configurable = scanner_constraints._backscan_configurable
+        self._controls = {}
+        self._microwave_frequency_range = (0.0, 1e12)
+        self._microwave_amplitude_range = (-200.0, 100.0)
 
         font = QtGui.QFont()
         font.setBold(True)
-        layout = QtWidgets.QGridLayout()
 
-        label = QtWidgets.QLabel('Forward')
-        label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
-        layout.addWidget(label, 0, 1)
+        # frequency_layout = QtWidgets.QGridLayout()
+        # for column, heading in enumerate(('Axis', 'Forward', 'Backward')):
+        #     label = QtWidgets.QLabel(heading)
+        #     label.setFont(font)
+        #     label.setAlignment(QtCore.Qt.AlignCenter)
+        #     frequency_layout.addWidget(label, 0, column)
 
-        label = QtWidgets.QLabel('Backward')
-        label.setFont(font)
-        label.setAlignment(QtCore.Qt.AlignCenter)
-        layout.addWidget(label, 0, 2)
-
-        for index, axis in enumerate(scanner_axes, 1):
-            ax_name = axis.name
-            label = QtWidgets.QLabel('{0}-Axis:'.format(ax_name.title()))
-            label.setObjectName('{0}_axis_label'.format(ax_name))
-            label.setFont(font)
-            label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-
-            forward_spinbox = ScienDSpinBox()
-            forward_spinbox.setObjectName('{0}_forward_scienDSpinBox'.format(ax_name))
-            forward_spinbox.setRange(*axis.frequency_range)
-            forward_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
-            forward_spinbox.setSuffix('Hz')
-            forward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            forward_spinbox.setMinimumSize(75, forward_spinbox.sizeHint().height())
-            forward_spinbox.lineEdit().setMinimumWidth(forward_spinbox.minimumWidth())
-            forward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                          QtWidgets.QSizePolicy.Preferred)
-
-            backward_spinbox = ScienDSpinBox()
-            backward_spinbox.setObjectName('{0}_backward_scienDSpinBox'.format(ax_name))
-            backward_spinbox.setRange(*axis.frequency_range)
-            backward_spinbox.setValue(max(axis.min_frequency, axis.max_frequency / 100))
-            backward_spinbox.setSuffix('Hz')
-            backward_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            backward_spinbox.setMinimumSize(75, backward_spinbox.sizeHint().height())
-            backward_spinbox.lineEdit().setMinimumWidth(backward_spinbox.minimumWidth())
-            backward_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                           QtWidgets.QSizePolicy.Preferred)
-            if not self._backscan_configurable:
-                backward_spinbox.setRange(0, 1)
-                backward_spinbox.setValue(0.)
-                backward_spinbox.setSuffix('/na')
-                backward_spinbox.setDisabled(True)
-
-            # Add to layout
-            layout.addWidget(label, index, 0)
-            layout.addWidget(forward_spinbox, index, 1)
-            layout.addWidget(backward_spinbox, index, 2)
-
-            # Connect signals
-            forward_spinbox.editingFinished.connect(
-                self.__get_axis_forward_callback(ax_name, forward_spinbox)
-            )
-            backward_spinbox.editingFinished.connect(
-                self.__get_axis_backward_callback(ax_name, backward_spinbox)
-            )
-
-            # Remember widgets references for later access
-            self.axes_widgets[ax_name] = dict()
-            self.axes_widgets[ax_name]['label'] = label
-            self.axes_widgets[ax_name]['forward_freq_spinbox'] = forward_spinbox
-            self.axes_widgets[ax_name]['backward_freq_spinbox'] = backward_spinbox
-
-        layout.setColumnStretch(1, 1)
-        layout.setColumnStretch(2, 1)
-
-        frequency_groupbox = QtWidgets.QGroupBox('Pixel Frequency')
-        frequency_groupbox.setFont(font)
-        frequency_groupbox.setLayout(layout)
-
-        self.setLayout(QtWidgets.QVBoxLayout())
-        self.layout().addWidget(frequency_groupbox)
-        
-        layout_shift = QtWidgets.QGridLayout()
-
-        for index, axis in enumerate(scanner_axes):
-
-            label = QtWidgets.QLabel(axis.name.title())
+        shift_layout = QtWidgets.QGridLayout()
+        range_layout = QtWidgets.QGridLayout()
+        for column, heading in enumerate(('Axis', 'Shift')):
+            label = QtWidgets.QLabel(heading)
             label.setFont(font)
             label.setAlignment(QtCore.Qt.AlignCenter)
-            layout_shift.addWidget(label, index, 0)
-
-            shift_spinbox = ScienDSpinBox()
-            shift_spinbox.setObjectName('{0}_shift_scienDSpinBox'.format(axis.name))
-            shift_spinbox.setRange(*axis.value_range)
-            shift_spinbox.setValue(0)
-            shift_spinbox.setSuffix('m')
-            shift_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            shift_spinbox.setMinimumSize(75, shift_spinbox.sizeHint().height())
-            shift_spinbox.lineEdit().setMinimumWidth(shift_spinbox.minimumWidth())
-            shift_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                            QtWidgets.QSizePolicy.Preferred)
-            layout_shift.addWidget(shift_spinbox, index, 1)
-
-            # Remember widgets references for later access
-            self.axes_widgets[axis.name]['shift_spinbox'] = shift_spinbox
-            
-
-        shift_groupbox = QtWidgets.QGroupBox('Shift')
-        shift_groupbox.setFont(font)
-        shift_groupbox.setLayout(layout_shift)
-
-        self.setLayout(QtWidgets.QVBoxLayout())
-        self.layout().addWidget(shift_groupbox)
-
-        
-        scan_range_groupbox = QtWidgets.QGroupBox('Scan range')
-        scan_range_groupbox.setFont(font)
-        scan_range_groupbox.setLayout(layout)
-
-        self.setLayout(QtWidgets.QVBoxLayout())
-        self.layout().addWidget(scan_range_groupbox)
-        
-        layout_scan_range = QtWidgets.QGridLayout()
-
-        for index, axis in enumerate(scanner_axes):
-
-            label = QtWidgets.QLabel(axis.name.title())
+            shift_layout.addWidget(label, 0, column)
+        for column, heading in enumerate(('Axis', 'Start', 'Stop')):
+            label = QtWidgets.QLabel(heading)
             label.setFont(font)
             label.setAlignment(QtCore.Qt.AlignCenter)
-            layout_shift.addWidget(label, index, 0)
+            range_layout.addWidget(label, 0, column)
 
-            start_scan_spinbox = ScienDSpinBox()
-            start_scan_spinbox.setObjectName('{0}_shift_scienDSpinBox'.format(axis.name))
-            start_scan_spinbox.setRange(*axis.value_range)
-            start_scan_spinbox.setValue(0)
-            start_scan_spinbox.setSuffix('m')
-            start_scan_spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-            start_scan_spinbox.setMinimumSize(75, start_scan_spinbox.sizeHint().height())
-            start_scan_spinbox.lineEdit().setMinimumWidth(start_scan_spinbox.minimumWidth())
-            start_scan_spinbox.setSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                            QtWidgets.QSizePolicy.Preferred)
-            layout_scan_range.addWidget(start_scan_spinbox, index, 2)
+        for row, axis in enumerate(scanner_axes, 1):
+            name = axis.name
+        #     label = QtWidgets.QLabel(f'{name.title()}-Axis:')
+        #     label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            # frequency_layout.addWidget(label, row, 0)
 
-            # Remember widgets references for later access
-            self.axes_widgets[axis.name]['start_scan_spinbox'] = start_scan_spinbox
-            
+            # forward = self._make_spinbox(axis.frequency_range, 'Hz')
+            # forward.setObjectName(f'{name}_forward_scienDSpinBox')
+            # forward.setValue(max(axis.min_frequency, axis.max_frequency / 100))
+            # backward = self._make_spinbox(axis.frequency_range, 'Hz')
+            # backward.setObjectName(f'{name}_backward_scienDSpinBox')
+            # backward.setValue(max(axis.min_frequency, axis.max_frequency / 100))
+            # if not self._backscan_configurable:
+            #     backward.setRange(0, 1)
+            #     backward.setValue(0)
+            #     backward.setSuffix('/na')
+            #     backward.setDisabled(True)
+            # frequency_layout.addWidget(forward, row, 1)
+            # frequency_layout.addWidget(backward, row, 2)
 
-        # shift_groupbox = QtWidgets.QGroupBox('Shift')
-        # shift_groupbox.setFont(font)
-        # shift_groupbox.setLayout(layout_shift)
+            shift_label = QtWidgets.QLabel(name.title())
+            shift_label.setAlignment(QtCore.Qt.AlignCenter)
+            shift_layout.addWidget(shift_label, row, 0)
+            shift = self._make_spinbox(axis.value_range, 'm')
+            shift.setObjectName(f'{name}_shift_scienDSpinBox')
+            shift.setValue(0)
+            shift_layout.addWidget(shift, row, 1)
 
-        # self.setLayout(QtWidgets.QVBoxLayout())
-        # self.layout().addWidget(shift_groupbox)
+            range_label = QtWidgets.QLabel(name.title())
+            range_label.setAlignment(QtCore.Qt.AlignCenter)
+            range_layout.addWidget(range_label, row, 0)
+            start = self._make_spinbox(axis.value_range, 'm')
+            stop = self._make_spinbox(axis.value_range, 'm')
+            start.setObjectName(f'{name}_range_start_scienDSpinBox')
+            stop.setObjectName(f'{name}_range_stop_scienDSpinBox')
+            start.setValue(axis.value_range[0])
+            stop.setValue(axis.value_range[1])
+            range_layout.addWidget(start, row, 1)
+            range_layout.addWidget(stop, row, 2)
+
+            self.axes_widgets[name] = {
+                'shift_spinbox': shift,
+                'start_scan_spinbox': start,
+                'stop_scan_spinbox': stop,
+            }
+        #     forward.editingFinished.connect(
+        #         self.__get_axis_forward_callback(name, forward)
+        #     )
+        #     backward.editingFinished.connect(
+        #         self.__get_axis_backward_callback(name, backward)
+        #     )
+        #     shift.editingFinished.connect(self.__get_axis_shift_callback(name, shift))
+
+        # frequency_groupbox = QtWidgets.QGroupBox('Pixel Frequency')
+        # frequency_groupbox.setFont(font)
+        # frequency_groupbox.setLayout(frequency_layout)
+
+        self.shift_groupbox = QtWidgets.QGroupBox('Shift')
+        self.shift_groupbox.setFont(font)
+        self.shift_groupbox.setLayout(shift_layout)
+        self.scan_range_groupbox = QtWidgets.QGroupBox('Scan Range')
+        self.scan_range_groupbox.setFont(font)
+        self.scan_range_groupbox.setLayout(range_layout)
+        self.controls_groupbox = self._create_controls_groupbox(font)
+
+        settings_layout = QtWidgets.QHBoxLayout()
+        settings_layout.addWidget(self.shift_groupbox)
+        settings_layout.addWidget(self.scan_range_groupbox)
+        settings_layout.addWidget(self.controls_groupbox)
+
+        main_layout = QtWidgets.QVBoxLayout(self)
+        #main_layout.addWidget(frequency_groupbox)
+        main_layout.addLayout(settings_layout)
+
+    @staticmethod
+    def _make_spinbox(value_range, suffix):
+        spinbox = ScienDSpinBox()
+        spinbox.setRange(*value_range)
+        spinbox.setSuffix(suffix)
+        spinbox.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
+        width = max(90, spinbox.sizeHint().width())
+        spinbox.setMinimumSize(width, spinbox.sizeHint().height())
+        # The global QSS can otherwise collapse a no-button editor to one pixel.
+        spinbox.lineEdit().setMinimumWidth(width)
+        spinbox.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred,
+            QtWidgets.QSizePolicy.Preferred,
+        )
+        return spinbox
+
+    def _create_controls_groupbox(self, font):
+        groupbox = QtWidgets.QGroupBox('Controls')
+        groupbox.setFont(font)
+        layout = QtWidgets.QVBoxLayout(groupbox)
+
+        checkbox_layout = QtWidgets.QGridLayout()
+        for index, (key, label) in enumerate((
+            ('a1', 'A1'),
+            ('a2', 'A2'),
+            ('repump', 'Repump'),
+            ('init_charge', 'Init. Charge'),
+        )):
+            checkbox = QtWidgets.QCheckBox(label)
+            checkbox.setObjectName(f'ple_{key}_checkBox')
+            checkbox_layout.addWidget(checkbox, index // 2, index % 2)
+            self._controls[key] = checkbox
+        layout.addLayout(checkbox_layout)
+
+        self.microwave_table = QtWidgets.QTableWidget(0, 2)
+        self.microwave_table.setHorizontalHeaderLabels(
+            ('Frequency [Hz]', 'Amplitude [dBm]')
+        )
+        self.microwave_table.verticalHeader().setVisible(False)
+        self.microwave_table.setSelectionBehavior(
+            QtWidgets.QAbstractItemView.SelectRows
+        )
+        self.microwave_table.horizontalHeader().setSectionResizeMode(
+            QtWidgets.QHeaderView.Stretch
+        )
+        layout.addWidget(self.microwave_table)
+
+        buttons_layout = QtWidgets.QHBoxLayout()
+        self.add_microwave_button = QtWidgets.QPushButton('Add')
+        self.remove_microwave_button = QtWidgets.QPushButton('Remove')
+        buttons_layout.addWidget(self.add_microwave_button)
+        buttons_layout.addWidget(self.remove_microwave_button)
+        layout.addLayout(buttons_layout)
+        self.add_microwave_button.clicked.connect(
+            lambda: self.add_microwave_row()
+        )
+        self.remove_microwave_button.clicked.connect(self.remove_microwave_rows)
+        return groupbox
 
     @property
     def axes(self):
@@ -223,82 +212,130 @@ class ScannerSettingsWidget(QtWidgets.QWidget):
 
     @property
     def frequency(self):
-        """
-        :return: dict with
-        """
         return {
-            ax: (widgets['forward_freq_spinbox'].value(), widgets['backward_freq_spinbox'].value()
-                if self._backscan_configurable else None)
-            for ax, widgets in self.axes_widgets.items()
+            axis: (
+                widgets['forward_freq_spinbox'].value(),
+                widgets['backward_freq_spinbox'].value()
+                if self._backscan_configurable else None,
+            )
+            for axis, widgets in self.axes_widgets.items()
         }
-    
+
     @property
     def shift(self):
-        """
-        :return: dict with
-        """
         return {
-            ax: widgets['shift_spinbox'].value() for ax, widgets in self.axes_widgets.items()
+            axis: widgets['shift_spinbox'].value()
+            for axis, widgets in self.axes_widgets.items()
         }
 
-    @QtCore.Slot(dict)
-    @QtCore.Slot(object, str)
+    @property
+    def scan_range(self):
+        return {
+            axis: (
+                widgets['start_scan_spinbox'].value(),
+                widgets['stop_scan_spinbox'].value(),
+            )
+            for axis, widgets in self.axes_widgets.items()
+        }
+
+    @property
+    def controls(self):
+        controls = {key: checkbox.isChecked() for key, checkbox in self._controls.items()}
+        controls['microwaves'] = [
+            {
+                'frequency': self.microwave_table.cellWidget(row, 0).value(),
+                'amplitude': self.microwave_table.cellWidget(row, 1).value(),
+            }
+            for row in range(self.microwave_table.rowCount())
+        ]
+        return controls
+
     def set_shift(self, value, axis=None):
-        if axis is None or isinstance(value, dict):
-            for ax, shift in value.items():
-                shift_spinbox = self.axes_widgets[ax]['shift_spinbox']
-                
-                shift_spinbox.blockSignals(True)
-                shift_spinbox.setValue(shift)
-                shift_spinbox.blockSignals(False)
-               
+        values = value if axis is None or isinstance(value, dict) else {axis: value}
+        for name, shift in values.items():
+            spinbox = self.axes_widgets[name]['shift_spinbox']
+            spinbox.blockSignals(True)
+            spinbox.setValue(shift)
+            spinbox.blockSignals(False)
 
-        else:
-            shift_spinbox = self.axes_widgets[axis]['shift_spinbox']
-            shift_spinbox.blockSignals(True)
-            shift_spinbox.setValue(value)
-            shift_spinbox.blockSignals(False)
-           
-
-
-    @QtCore.Slot(dict)
-    @QtCore.Slot(object, str)
     def set_frequency(self, value, axis=None):
-        if axis is None or isinstance(value, dict):
-            for ax, (forward, backwards) in value.items():
-                forward_spinbox = self.axes_widgets[ax]['forward_freq_spinbox']
-                backward_spinbox = self.axes_widgets[ax]['backward_freq_spinbox']
-                forward_spinbox.blockSignals(True)
-                forward_spinbox.setValue(forward)
-                forward_spinbox.blockSignals(False)
-                backward_spinbox.blockSignals(True)
-                backward_spinbox.setValue(backwards) if self._backscan_configurable else None
-                backward_spinbox.blockSignals(False)
-        else:
-            forward_spinbox = self.axes_widgets[axis]['forward_freq_spinbox']
-            backward_spinbox = self.axes_widgets[axis]['backward_freq_spinbox']
-            forward, backwards = value
-            forward_spinbox.blockSignals(True)
-            forward_spinbox.setValue(forward)
-            forward_spinbox.blockSignals(False)
-            backward_spinbox.blockSignals(True)
-            backward_spinbox.setValue(backwards) if self._backscan_configurable else None
-            backward_spinbox.blockSignals(False)
+        values = value if axis is None or isinstance(value, dict) else {axis: value}
+        for name, (forward, backward) in values.items():
+            widgets = self.axes_widgets[name]
+            widgets['forward_freq_spinbox'].blockSignals(True)
+            widgets['forward_freq_spinbox'].setValue(forward)
+            widgets['forward_freq_spinbox'].blockSignals(False)
+            widgets['backward_freq_spinbox'].blockSignals(True)
+            if self._backscan_configurable and backward is not None:
+                widgets['backward_freq_spinbox'].setValue(backward)
+            widgets['backward_freq_spinbox'].blockSignals(False)
+
+    def set_scan_range(self, value):
+        for name, (start, stop) in value.items():
+            for key, setting in (
+                ('start_scan_spinbox', start),
+                ('stop_scan_spinbox', stop),
+            ):
+                spinbox = self.axes_widgets[name][key]
+                spinbox.blockSignals(True)
+                spinbox.setValue(setting)
+                spinbox.blockSignals(False)
+
+    def set_controls(self, controls):
+        for name, checkbox in self._controls.items():
+            checkbox.blockSignals(True)
+            checkbox.setChecked(bool(controls.get(name, False)))
+            checkbox.blockSignals(False)
+
+        microwaves = controls.get('microwaves', [])
+        self.microwave_table.setRowCount(0)
+        for microwave in microwaves:
+            self.add_microwave_row(
+                microwave['frequency'],
+                microwave['amplitude'],
+            )
+
+    def add_microwave_row(self, frequency=0.0, amplitude=0.0):
+        row = self.microwave_table.rowCount()
+        self.microwave_table.insertRow(row)
+        frequency_spinbox = self._make_spinbox(
+            self._microwave_frequency_range,
+            'Hz',
+        )
+        frequency_spinbox.setDecimals(6)
+        frequency_spinbox.setValue(frequency)
+        amplitude_spinbox = self._make_spinbox(
+            self._microwave_amplitude_range,
+            'dBm',
+        )
+        amplitude_spinbox.setDecimals(6)
+        amplitude_spinbox.setValue(amplitude)
+        self.microwave_table.setCellWidget(row, 0, frequency_spinbox)
+        self.microwave_table.setCellWidget(row, 1, amplitude_spinbox)
+
+    def remove_microwave_rows(self):
+        rows = sorted(
+            {index.row() for index in self.microwave_table.selectedIndexes()},
+            reverse=True,
+        )
+        if not rows and self.microwave_table.rowCount():
+            rows = [self.microwave_table.rowCount() - 1]
+        for row in rows:
+            self.microwave_table.removeRow(row)
 
     def __get_axis_backward_callback(self, axis, spinbox):
         def callback():
-            backward_spinbox = self.axes_widgets[axis]['backward_freq_spinbox']
-            self.sigFrequencyChanged.emit(axis, spinbox.value(), backward_spinbox.value())
+            forward = self.axes_widgets[axis]['forward_freq_spinbox']
+            self.sigFrequencyChanged.emit(axis, forward.value(), spinbox.value())
         return callback
 
     def __get_axis_forward_callback(self, axis, spinbox):
         def callback():
-            forward_spinbox = self.axes_widgets[axis]['forward_freq_spinbox']
-            self.sigFrequencyChanged.emit(axis, spinbox.value(), forward_spinbox.value())
+            backward = self.axes_widgets[axis]['backward_freq_spinbox']
+            self.sigFrequencyChanged.emit(axis, spinbox.value(), backward.value())
         return callback
 
     def __get_axis_shift_callback(self, axis, spinbox):
         def callback():
-            shift_spinbox = self.axes_widgets[axis]['shift_spinbox']
-            self.sigShiftChanged.emit(axis, shift_spinbox.value())
+            self.sigShiftChanged.emit(axis, spinbox.value())
         return callback
