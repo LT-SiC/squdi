@@ -14,6 +14,7 @@ docstrings.
 - Ni Finite Sampling Input module now returns digital input channel values in "clicks/counts" per second and not "clicks/counts" per clock cycle 
 
 ### New Features
+- Added the hardware-free SiC Circuit Studio logic module with loopback-only browser hosting, OpenQASM status and signal access, a dummy config, and tests.
 - New `qudi.interface.data_instream_interface.SampleTiming` Enum added to `DataInStreamInterface` 
 constraints to allow non-uniform sampling mode.
 - New hardware module added that implements the HighFinesse wavemeter as a data instream device, replacing the old (non-functional) wavemeter toolchain.
