@@ -38,7 +38,7 @@ class GatedCounter(LogicBase):
     # add possible signals here
     # Needed a connection to the queue as well... connection to mcas?
     mcas_dict_holder = Connector(interface='McasDictHolderInterface')
-    fastcounter = Connector(interface='TimeTaggerInterface')
+    fastcounter = Connector(interface='TT')
     
     sigHistogramUpdated = QtCore.Signal()
     sigMeasurementFinished = QtCore.Signal()
