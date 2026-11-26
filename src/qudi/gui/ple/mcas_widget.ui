@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MCASWidget</class>
+ <widget class="QWidget" name="MCASWidget">
+  <property name="minimumSize">
+   <size>
+    <width>220</width>
+    <height>0</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="controlsGroupBox">
+     <property name="title">
+      <string>Controls</string>
+     </property>
+     <layout class="QVBoxLayout" name="controlsLayout">
+      <item>
+       <layout class="QGridLayout" name="checkboxLayout">
+        <item row="0" column="0">
+         <widget class="QCheckBox" name="a1CheckBox">
+          <property name="text">
+           <string>A1</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QCheckBox" name="a2CheckBox">
+          <property name="text">
+           <string>A2</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QCheckBox" name="repumpCheckBox">
+          <property name="text">
+           <string>Repump</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QCheckBox" name="initChargeCheckBox">
+          <property name="text">
+           <string>Init. Charge</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QTableWidget" name="microwaveTable">
+        <property name="minimumSize">
+         <size>
+          <width>200</width>
+          <height>90</height>
+         </size>
+        </property>
+        <property name="columnCount">
+         <number>2</number>
+        </property>
+        <property name="rowCount">
+         <number>0</number>
+        </property>
+        <attribute name="horizontalHeaderStretchLastSection">
+         <bool>true</bool>
+        </attribute>
+        <column>
+         <property name="text">
+          <string>Frequency [Hz]</string>
+         </property>
+        </column>
+        <column>
+         <property name="text">
+          <string>Amplitude [dBm]</string>
+         </property>
+        </column>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="microwaveButtonLayout">
+        <item>
+         <widget class="QPushButton" name="addMicrowaveButton">
+          <property name="text">
+           <string>Add</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeMicrowaveButton">
+          <property name="text">
+           <string>Remove</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

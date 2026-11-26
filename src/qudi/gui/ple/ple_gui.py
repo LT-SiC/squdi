@@ -108,6 +108,7 @@ class PLEScanGui(GuiBase):
         channel = channels[self._scanning_logic._channel]
 
         self._mw = PLEScanMainWindow(self.axis, channel)
+
         self._mw.actionCalibrate_frequency_axis = QtGui.QAction(
             "Calibrate frequency axis", self._mw
         )
@@ -121,6 +122,7 @@ class PLEScanGui(GuiBase):
         self.sigScannerTargetChanged.connect(self._scanning_logic.set_target_position, QtCore.Qt.QueuedConnection)
         self._scanning_logic.sigScannerTargetChanged.connect(self.scanner_target_updated, QtCore.Qt.QueuedConnection)
         self.sigScanSettingsChanged.connect(self._scanning_logic.set_scan_settings, QtCore.Qt.QueuedConnection)
+        
         self._scanning_logic.sigUpdateAccumulated.connect(self._update_accumulated_scan, QtCore.Qt.QueuedConnection)
         self._scanning_logic.sigToggleScan.connect(self._scanning_logic.toggle_scan, QtCore.Qt.QueuedConnection)
         self._mw.actionToggle_scan.triggered.connect(self.toggle_scan, QtCore.Qt.QueuedConnection)
@@ -159,16 +161,23 @@ class PLEScanGui(GuiBase):
         self._mw.channel_comboBox.addItems(self._scanning_logic.scanner_channels.keys())
         self._mw.channel_comboBox.currentTextChanged.connect(self._set_channel)
         self._mw.channel_comboBox.setCurrentText(self._scanning_logic._channel)
+
+        self._mcas_dict_holder = self._mcas_dict_holder()
+        if self._mcas_dict_holder is not None:
+            self._mw.add_dock_widget("MCAS")
+            self._mw.MCAS_widget.sigControlsChanged.connect(
+                                    self._ple_controls_changed
+                                )
+
         # create microwave control window if microwave is set
-        if self._microwave_logic() is not None:
-            self._microwave_logic = self._microwave_logic()
+        self._microwave_logic = self._microwave_logic()
+        if self._microwave_logic is not None:
             self._mw.add_dock_widget("Microwave")
             self._init_microwave()
+            
         self._repump_logic = self._repump_logic()
         if self._repump_logic is not None:
-
             self._scanning_logic.sigRepeatScan.connect(self._repump_logic.repump_before_scan, QtCore.Qt.QueuedConnection)
-
             self._mw.add_dock_widget("Pulsed")
             self._mw.Pulsed_widget.sig_pulser_params_updated.connect(self._repump_logic.pulser_updated, QtCore.Qt.QueuedConnection)
             self._repump_logic.sigGuiParamsUpdated.connect(self._mw.Pulsed_widget.update_gui, QtCore.Qt.QueuedConnection)
@@ -177,18 +186,11 @@ class PLEScanGui(GuiBase):
 
         self._controller_logic = self._controller_logic()
         if self._controller_logic is not None:
-
             self._mw.add_dock_widget("Controller")
             self._mw.Controller_widget.sig_controller_params_updated.connect(self._controller_logic.params_updated, QtCore.Qt.QueuedConnection)
             self._controller_logic.sigGuiParamsUpdated.connect(self._mw.Controller_widget.update_gui, QtCore.Qt.QueuedConnection)
             self._controller_logic.sigGuiParamsUpdated.emit(self._controller_logic.parameters)
 
-        self._mcas_dict_holder = self._mcas_dict_holder()
-        if self._mcas_dict_holder is not None:
-            self._mw.add_dock_widget("MCAS")
-            self._mw.MCAS_widget.sig_mcas_params_updated.connect(self._mcas_dict_holder.params_updated, QtCore.Qt.QueuedConnection)
-            self._mcas_dict_holder.sigGuiParamsUpdated.connect(self._mw.MCAS_widget.update_gui, QtCore.Qt.QueuedConnection)
-            
         # PLE tracking
         self._mw.actionTrackPLE.triggered.connect(
             lambda: self._optimize_logic().toggle_ple_tracking(self._mw.actionTrackPLE.isChecked()),
@@ -257,6 +259,9 @@ class PLEScanGui(GuiBase):
             self.frequency_calibration_updated
         )
         self._scanning_logic.sigScanSettingsChanged.disconnect(self.scanner_settings_updated)
+        self._mw.MCAS_widget.sigControlsChanged.disconnect(
+            self._ple_controls_changed
+        )
 
         self.sigToggleOptimize.disconnect()
         self.sigOptimizerSettingsChanged.disconnect()
@@ -316,20 +321,21 @@ class PLEScanGui(GuiBase):
 
     def _init_scanner_settings(self):
         """ """
+        pass
         # Create the Settings dialog
-        self._psd = PleSettingDialog(
-            tuple(self._scanning_logic.scanner_axes.values()),
-            self._scanning_logic.scanner_constraints,
-        )
+        # self._psd = PleSettingDialog(
+        #     tuple(self._scanning_logic.scanner_axes.values()),
+        #     self._scanning_logic.scanner_constraints,
+        # )
 
-        # Connect MainWindow actions
-        self._mw.action_ple_settings.triggered.connect(lambda x: self._psd.exec_())
+        # # Connect MainWindow actions
+        # self._mw.action_ple_settings.triggered.connect(lambda x: self._psd.exec_())
 
-        # Connect the action of the settings dialog with the GUI module:
-        self._psd.accepted.connect(self.apply_scanner_settings)
-        self._psd.rejected.connect(self.restore_scanner_settings)
-        self._psd.button_box.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.apply_scanner_settings)
-        self.restore_scanner_settings()
+        # # Connect the action of the settings dialog with the GUI module:
+        # self._psd.accepted.connect(self.apply_scanner_settings)
+        # self._psd.rejected.connect(self.restore_scanner_settings)
+        # self._psd.button_box.button(QtWidgets.QDialogButtonBox.Apply).clicked.connect(self.apply_scanner_settings)
+        # self.restore_scanner_settings()
 
     @QtCore.Slot()
     def apply_scanner_settings(self):
@@ -341,8 +347,11 @@ class PLEScanGui(GuiBase):
             "frequency": forward_freq,
             "shift": shift,
             "range": self._psd.settings_widget.scan_range,
-            "ple_controls": self._psd.settings_widget.controls,
         })
+
+    @QtCore.Slot(dict)
+    def _ple_controls_changed(self, controls):
+        self.sigScanSettingsChanged.emit({"ple_controls": controls})
 
     @QtCore.Slot()
     def change_optimizer_settings(self):
@@ -412,6 +421,15 @@ class PLEScanGui(GuiBase):
                 # Adjust crosshair size according to optimizer range
                 # self.update_crosshair_sizes()
 
+    def _init_mcas(self):
+
+        mw_constraints = self._microwave_logic.microwave_constraints
+        self._mw.Microwave_widget.set_constraints(mw_constraints)
+        self._mw.Microwave_widget.sig_microwave_params_updated.connect(self._microwave_logic.set_cw_parameters)
+        self._mw.Microwave_widget.sig_microwave_enabled.connect(self._microwave_logic.toggle_cw_output)
+        self._microwave_logic.sigCwParametersUpdated.connect(self._mw.Microwave_widget.update_params)
+        self._microwave_logic.sigCwStateUpdated.connect(self._mw.Microwave_widget.enable_microwave)
+        self._microwave_logic.sigCwParametersUpdated.emit(self._microwave_logic.cw_parameters)
     def _init_microwave(self):
 
         mw_constraints = self._microwave_logic.microwave_constraints
@@ -657,11 +675,14 @@ class PLEScanGui(GuiBase):
         @param dict settings: Settings dict containing the scanner settings to update.
                               If None (default) read the scanner setting from logic and update.
         """
-        if self._mw.action_optimize_position.isChecked():  # self.module_uuid:
-            return
-
         if not isinstance(settings, dict):
             settings = self._scanning_logic.scan_settings
+
+        if "ple_controls" in settings:
+            self._mw.MCAS_widget.set_controls(settings["ple_controls"])
+
+        if self._mw.action_optimize_position.isChecked():  # self.module_uuid:
+            return
 
         if hasattr(self, "_psd"):
             settings_widget = self._psd.settings_widget
@@ -671,8 +692,6 @@ class PLEScanGui(GuiBase):
                 settings_widget.set_shift(settings["shift"])
             if "range" in settings:
                 settings_widget.set_scan_range(settings["range"])
-            if "ple_controls" in settings:
-                settings_widget.set_controls(settings["ple_controls"])
 
         # if self._scanner_settings_locked:
         #     return

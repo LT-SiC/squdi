@@ -6,10 +6,9 @@ import importlib
 from qudi.interface.scanning_probe_interface import ScannerAxis, ScannerChannel
 from qudi.gui.ple.ple_repump_widget import PleMicrowaveWidget, PlePulsedWidget
 from qudi.gui.ple.controller_widget import ControllerWidget
+from qudi.gui.ple.mcas_widget import MCASWidget
 from typing import Tuple
 from typing import Optional
-
-from gui.ple.mcas_widget import McasWidget
 try:
     importlib.reload(ple_data_widget)
 except NameError:
@@ -35,9 +34,15 @@ class PLEScanMainWindow(QtWidgets.QMainWindow):
         # Load it
         super(PLEScanMainWindow, self).__init__()
         uic.loadUi(ui_file, self)
+
+        # Attributes from ple_gui.ui are created dynamically by uic.loadUi.
+        self.ple_data_dockWidget: QtWidgets.QDockWidget
+        self.ple_averaged_dockWidget: QtWidgets.QDockWidget
+        self.ple_matrix_dockWidget: QtWidgets.QDockWidget
+
         self.show()
 
-        self.centralwidget.hide()
+        getattr(self, "centralwidget").hide()
 
         self.ple_widget = ple_data_widget.PLEDataWidget(axes, channel)
         self.ple_data_dockWidget.setWidget(self.ple_widget)
@@ -57,15 +62,20 @@ class PLEScanMainWindow(QtWidgets.QMainWindow):
         elif name == "Controller":
             setattr(self, f"{name}_widget", ControllerWidget(name))
         elif name == "MCAS":
-            setattr(self, f"{name}_widget", McasWidget(name))
+            setattr(self, f"{name}_widget", MCASWidget())
         setattr(self, f"{name}_dockWidget", QtWidgets.QDockWidget())
         dockWidget = getattr(self, f"{name}_dockWidget")
         dockWidget.setObjectName(name)
-        dockWidget.setWindowTitle(name)
+        dockWidget.setWindowTitle("PLE Controls" if name == "MCAS" else name)
         dockWidget.setFloating(False)
 
         widget = getattr(self, f"{name}_widget")
-        self.addDockWidget(QtCore.Qt.TopDockWidgetArea, dockWidget)
+        dock_area = (
+            QtCore.Qt.DockWidgetArea.RightDockWidgetArea
+            if name == "MCAS"
+            else QtCore.Qt.DockWidgetArea.TopDockWidgetArea
+        )
+        self.addDockWidget(dock_area, dockWidget)
         dockWidget.setWidget(widget)
 
 
@@ -76,6 +86,6 @@ class PLEScanMainWindow(QtWidgets.QMainWindow):
 
         # Rearrange DockWidget
         # if not self.action_show_data.isChecked():
-        self.data_dockwidget.show()
-        self.data_dockwidget.setFloating(False)
-        self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.data_dockwidget)
+        getattr(self, "data_dockwidget").show()
+        getattr(self, "data_dockwidget").setFloating(False)
+        self.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, getattr(self, "data_dockwidget"))
