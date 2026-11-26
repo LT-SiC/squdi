@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget,
     QTextEdit, QPushButton, QLabel, QWidget, QFrame
 )
-from PySide6.QtCore import pyqtSignal
+from PySide6.QtCore import Signal
 from PySide6.QtGui import QFont, QColor, QSyntaxHighlighter, QTextCharFormat
 
 from models import (CircuitDocument,
@@ -106,7 +106,7 @@ _SECTIONS = [
 
 class CodeSectionsDialog(QDialog):
     """Modal dialog to edit all fixed code sections of a CircuitDocument."""
-    sections_changed = pyqtSignal()
+    sections_changed = Signal()
 
     def __init__(self, doc, parent=None):
         super(CodeSectionsDialog, self).__init__(parent)

@@ -16,17 +16,17 @@ New in this version:
 """
 from typing import Optional, Dict, Tuple, List
 import math
-
-from PyQt5.QtWidgets import (
-    QWidget, QSizePolicy, QToolTip, QMenu, QAction, QInputDialog, QApplication
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import (
+    QWidget, QSizePolicy, QToolTip, QMenu, QInputDialog
 )
-from PyQt5.QtCore import Qt, QRect, QPoint, QPointF, pyqtSignal, QMimeData
-from PyQt5.QtGui import (
+from PySide6.QtCore import Qt, QRect, QPoint, QPointF, Signal
+from PySide6.QtGui import (
     QPainter, QColor, QPen, QFont, QBrush,
-    QLinearGradient, QPainterPath, QDrag, QRadialGradient
+    QLinearGradient, QPainterPath
 )
 
-from models import CircuitDocument, GatePlacement, GateDefinition, QubitRole, PREFILL_LAST_GATE_ARGS
+from models import CircuitDocument, GatePlacement, GateDefinition, PREFILL_LAST_GATE_ARGS
 from library import GateLibrary
 
 # ── Palette ───────────────────────────────────────────────────────────────────
@@ -47,10 +47,10 @@ MOVE_DRAG_DIST = 8   # pixels before a move-drag starts
 
 
 class CircuitGridWidget(QWidget):
-    placement_selected   = pyqtSignal(str)
-    placement_deselected = pyqtSignal()
-    circuit_changed      = pyqtSignal()
-    status_message       = pyqtSignal(str)   # for the main window status bar
+    placement_selected   = Signal(str)
+    placement_deselected = Signal()
+    circuit_changed      = Signal()
+    status_message       = Signal(str)   # for the main window status bar
 
     def __init__(self, doc: CircuitDocument, parent=None):
         super().__init__(parent)

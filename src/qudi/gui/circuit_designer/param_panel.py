@@ -7,10 +7,10 @@ Supports np.linspace / np.arange / range / literal lists.
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QFrame,
-    QAbstractItemView, QSizePolicy
+    QAbstractItemView
 )
-from PySide6.QtCore import Qt, pyqtSignal, QTimer
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 
 from models import CircuitDocument, Parameter
 
@@ -71,7 +71,7 @@ def _preview(expr):
 
 class ParamPanel(QWidget):
     """Parameter list panel."""
-    params_changed = pyqtSignal()
+    params_changed = Signal()
 
     def __init__(self, doc: CircuitDocument, parent=None):
         super().__init__(parent)

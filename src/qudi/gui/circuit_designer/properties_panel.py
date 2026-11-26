@@ -14,9 +14,9 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QFrame, QScrollArea, QComboBox, QPushButton, QCheckBox
 )
-from PySide6.QtCore import Qt, pyqtSignal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer
 
-from models import (CircuitDocument, GatePlacement, GateDefinition,
+from models import (CircuitDocument,
                     PREFILL_LAST_GATE_ARGS, spin_states, spin_state_color)
 from library import GateLibrary
 
@@ -34,7 +34,7 @@ QComboBox QAbstractItemView{background:#1A1D24;color:#CDD1DB;}
 
 
 class PropertiesPanel(QWidget):
-    placement_changed = pyqtSignal()
+    placement_changed = Signal()
 
     def __init__(self, doc: CircuitDocument, parent=None):
         super().__init__(parent)

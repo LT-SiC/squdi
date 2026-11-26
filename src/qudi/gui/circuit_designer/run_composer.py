@@ -50,7 +50,7 @@ def main():
 
 class CircuitGui(GuiBase):
     # Connect to the Queue.
-    queue_logic = Connector(interface="queue_logic")  # class name
+    queue_logic = Connector(interface="QueueLogic")  # class name
 
     def on_activate(self):
         self._win = MainWindow()

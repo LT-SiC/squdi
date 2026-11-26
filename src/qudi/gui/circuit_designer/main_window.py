@@ -13,15 +13,16 @@ import os
 import sys
 from typing import Optional, List
 
+from PySide6.QtGui import QAction
+from PySide6.QtGui import QShortcut
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QSplitter, QScrollArea,
-    QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QAction, QFileDialog, QMessageBox, QFrame,
-    QShortcut, QStatusBar, QPushButton, QTabWidget,
+    QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QFileDialog, QMessageBox, QFrame,
+    QStatusBar, QPushButton, QTabWidget,
     QComboBox, QSizePolicy
 )
 from PySide6.QtCore import Qt, QSettings
-from PySide6.QtGui import QKeySequence, QFont
+from PySide6.QtGui import QKeySequence
 
 from models import (CircuitDocument, Parameter,
                     DEFAULT_PREAMBLE, DEFAULT_FIXED_MIDDLE, DEFAULT_FIXED_END)

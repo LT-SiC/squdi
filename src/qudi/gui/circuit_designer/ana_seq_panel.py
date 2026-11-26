@@ -10,10 +10,10 @@ Shows:
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QFrame, QAbstractItemView, QComboBox, QSizePolicy
+    QFrame, QAbstractItemView, QComboBox
 )
-from PySide6.QtCore import Qt, pyqtSignal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
 
 from models import CircuitDocument, AnaSeqEntry
 from codegen import generate_ana_seq_block
@@ -40,7 +40,7 @@ C_KIND=0; C_CMP=1; C_THRESH=2; C_NLP=3; C_DELTA=4; C_NRES=5; C_COMMENT=6
 
 class AnaSeqPanel(QWidget):
     """Panel for editing ana_seq entries."""
-    changed = pyqtSignal()
+    changed = Signal()
 
     def __init__(self, doc: CircuitDocument, parent=None):
         super().__init__(parent)

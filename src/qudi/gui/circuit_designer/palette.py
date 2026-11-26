@@ -6,10 +6,10 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QListWidget, QListWidgetItem, QAbstractItemView, QFrame, QSizePolicy
+    QListWidget, QListWidgetItem, QAbstractItemView, QFrame
 )
-from PySide6.QtCore import Qt, QSize, QPoint, QMimeData, pyqtSignal
-from PySide6.QtGui import QColor, QPixmap, QPainter, QFont, QDrag
+from PySide6.QtCore import Qt, QSize, QPoint, QMimeData, Signal
+from PySide6.QtGui import QColor, QPixmap, QPainter, QDrag
 
 from models import GateDefinition, CircuitDocument
 from library import GateLibrary
@@ -63,8 +63,8 @@ class GatePaletteItem(QWidget):
 
 
 class GatePalette(QWidget):
-    edit_gate = pyqtSignal(str)
-    new_gate  = pyqtSignal()
+    edit_gate = Signal(str)
+    new_gate  = Signal()
 
     def __init__(self, doc: CircuitDocument, parent=None):
         super().__init__(parent)

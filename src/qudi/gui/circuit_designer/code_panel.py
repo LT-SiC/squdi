@@ -5,9 +5,9 @@ Live code preview panel with syntax highlighting and export button.
 import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QTabWidget, QFrame, QFileDialog, QSizePolicy
+    QTextEdit, QTabWidget, QFrame, QFileDialog
 )
-from PySide6.QtCore import Qt, pyqtSignal, QTimer
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import (
     QFont, QColor, QSyntaxHighlighter, QTextCharFormat,
     QTextCursor

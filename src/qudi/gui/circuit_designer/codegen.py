@@ -16,7 +16,7 @@ it lives in the preamble or fixed sections so the user controls it.
 """
 from typing import List, Optional
 
-from models import (CircuitDocument, GatePlacement, Parameter,
+from models import (CircuitDocument,
                     DEFAULT_ANA_SEQ_CODE)
 from library import GateLibrary
 

@@ -16,9 +16,9 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTextEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QFrame, QColorDialog, QSplitter, QWidget,
-    QMessageBox, QAbstractItemView, QSpinBox, QCheckBox, QComboBox
+    QMessageBox, QSpinBox, QCheckBox, QComboBox
 )
-from PySide6.QtCore import Qt, pyqtSignal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 
 from models import GateDefinition, GateArg, QubitRole, CircuitDocument
@@ -84,7 +84,7 @@ def _parse_args_from_template(template: str) -> List[str]:
 
 
 class ColorButton(QPushButton):
-    color_changed = pyqtSignal(str)
+    color_changed = Signal(str)
 
     def __init__(self, color="#4A90D9", parent=None):
         super().__init__(parent)
@@ -113,7 +113,7 @@ class ColorButton(QPushButton):
 
 
 class GateEditorDialog(QDialog):
-    gate_saved = pyqtSignal(str)
+    gate_saved = Signal(str)
 
     def __init__(self, gate_def: Optional[GateDefinition],
                  doc: CircuitDocument, parent=None):
