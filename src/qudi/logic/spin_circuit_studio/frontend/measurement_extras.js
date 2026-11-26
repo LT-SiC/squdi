@@ -1,4 +1,4 @@
-/* SiC Circuit Studio — demonstration-only spatial visualizations.
+/* Spin Circuit Studio — demonstration-only spatial visualizations.
  * No actual spin coordinates, measured couplings, or experimental data here.
  */
 'use strict';

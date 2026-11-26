@@ -1,6 +1,6 @@
-# SiC Circuit Studio Qudi logic
+# Spin Circuit Studio Qudi logic
 
-`SicCircuitStudioLogic` serves the standalone SiC Circuit Studio frontend and its
+`SpinCircuitStudioLogic` serves the standalone Spin Circuit Studio frontend and its
 hardware-independent circuit export backend from a loopback-only HTTP server.
 It does not connect to instruments or deliver code to a specific consumer.
 
@@ -10,15 +10,15 @@ Add the logic module to a Qudi configuration:
 
 ```yaml
 logic:
-    sic_circuit_studio_logic:
-        module.Class: 'sic_circuit_studio.sic_circuit_studio_logic.SicCircuitStudioLogic'
+    spin_circuit_studio_logic:
+        module.Class: 'spin_circuit_studio.spin_circuit_studio_logic.SpinCircuitStudioLogic'
         options:
             port: 8765
 ```
 
 The sample hardware-free configuration is
-`src/qudi/configs/sic_circuit_studio_dummy.cfg`. Start Qudi with that
-configuration, activate `sic_circuit_studio_logic`, then open
+`src/qudi/configs/spin_circuit_studio_dummy.cfg`. Start Qudi with that
+configuration, activate `spin_circuit_studio_logic`, then open
 `http://127.0.0.1:8765` in a browser. Deactivating the logic stops the HTTP
 server. The listener is fixed to `127.0.0.1`; there is no host option.
 

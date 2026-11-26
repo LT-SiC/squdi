@@ -1,6 +1,6 @@
 {
-  "name": "SiC Circuit Studio",
-  "short_name": "SiC Studio",
+  "name": "Spin Circuit Studio",
+  "short_name": "Spin Studio",
   "description": "Spin-circuit design and simulated measurement workspace",
   "start_url": "/",
   "display": "standalone",

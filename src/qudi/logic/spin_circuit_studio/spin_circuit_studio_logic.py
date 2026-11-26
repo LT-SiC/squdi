@@ -1,4 +1,4 @@
-"""Qudi logic module hosting the SiC Circuit Studio browser application."""
+"""Qudi logic module hosting the Spin Circuit Studio browser application."""
 from __future__ import annotations
 
 import copy
@@ -14,7 +14,7 @@ from .backend.circuit import normalize, qasm2
 from .http_server import create_server
 
 
-class SicCircuitStudioLogic(LogicBase):
+class SpinCircuitStudioLogic(LogicBase):
     """Serve the browser studio and publish generic OpenQASM updates."""
 
     _port = ConfigOption(name="port", default=8765, missing="nothing")
@@ -35,11 +35,15 @@ class SicCircuitStudioLogic(LogicBase):
         self._state_lock = threading.RLock()
 
     def on_activate(self) -> None:
-        self._server = create_server(port=self._port, on_qasm_export=self._record_qasm)
+        self._server = create_server(
+            port=self._port,
+            on_qasm_export=self._record_qasm,
+            on_setup_export=self._log_setup_qasm,
+        )
         self._server_thread = threading.Thread(
             target=self._server.serve_forever,
             kwargs={"poll_interval": 0.1},
-            name="SicCircuitStudioHTTPServer",
+            name="SpinCircuitStudioHTTPServer",
             daemon=True,
         )
         self._server_thread.start()
@@ -47,10 +51,12 @@ class SicCircuitStudioLogic(LogicBase):
             self._server.server_close()
             self._server = None
             self._server_thread = None
-            raise RuntimeError("SiC Circuit Studio HTTP server did not start")
-        address, port = self._server.server_address
+            raise RuntimeError("Spin Circuit Studio HTTP server did not start")
+        server_address = self._server.server_address
+        address = server_address[0]
+        port = server_address[1]
         self.server_url = f"http://{address}:{port}"
-        self.log.info("SiC Circuit Studio available at %s", self.server_url)
+        self.log.info("Spin Circuit Studio available at %s", self.server_url)
 
     def on_deactivate(self) -> None:
         server = getattr(self, "_server", None)
@@ -63,10 +69,10 @@ class SicCircuitStudioLogic(LogicBase):
         if thread is not None:
             thread.join(timeout=10)
             if thread.is_alive():
-                self.log.error("SiC Circuit Studio HTTP server did not stop within 10 seconds")
+                self.log.error("Spin Circuit Studio HTTP server did not stop within 10 seconds")
         self._server = None
         self._server_thread = None
-        self.log.info("SiC Circuit Studio stopped")
+        self.log.info("Spin Circuit Studio stopped")
 
     def _record_qasm(self, circuit: dict, code: str) -> None:
         normalized = copy.deepcopy(circuit)
@@ -74,6 +80,10 @@ class SicCircuitStudioLogic(LogicBase):
             self.circuit = normalized
             self.openqasm_code = code
         self.sigOpenQasmUpdated.emit(code, copy.deepcopy(normalized))
+
+    def _log_setup_qasm(self, code: str) -> None:
+        print("%s", code)
+        self.log.info("%s", code)
 
     def set_circuit(self, circuit: dict) -> str:
         """Normalize and publish a circuit supplied by another logic module."""

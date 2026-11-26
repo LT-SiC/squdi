@@ -1,4 +1,4 @@
-/* SiC Circuit Studio v0.3.3 — dependency-free editor, no laboratory hardware calls. */
+/* Spin Circuit Studio v0.3.3 — dependency-free editor, no laboratory hardware calls. */
 'use strict';
 const $ = id => document.getElementById(id);
 const PI = Math.PI;
@@ -310,16 +310,19 @@ function highlightCode(code,fmt){
  }
  return html+escapeHtml(code.slice(pos));
 }
-async function compile(){
+async function compile(action){
  const seq=++exportSeq;const fmt=$('format').value;
  const clean={...circuit,gates:circuit.gates.map(({id,...g})=>g)};
  const out=$('output');out.classList.remove('error');out.textContent='Generating…';
+ $('send-to-setup').disabled=true;
  $('code-lang').textContent={qasm:'OpenQASM 2.0',qiskit:'Python · Qiskit',mcas:'Python · MCAS'}[fmt];
  try{
- const res=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({circuit:clean,format:fmt})});
+ const exportRequest={circuit:clean,format:fmt};if(action)exportRequest.action=action;
+ const res=await fetch('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(exportRequest)});
  const payload=await res.json();if(seq!==exportSeq)return;
  if(!res.ok){outputCode='';out.classList.add('error');out.textContent=payload.error||'Export unavailable';}
  else{outputCode=payload.code;out.innerHTML=highlightCode(payload.code,fmt);}
+ $('send-to-setup').disabled=fmt!=='qasm'||typeof payload.code!=='string'||!payload.code.trim();
  if(!$('page-measurement').classList.contains('hidden'))refreshMeasurementCode();
  $('export-note').textContent=fmt==='mcas'?'Legacy NV three-spin mapping only. This is not a SiC/squdi driver.':fmt==='qiskit'?'Qiskit Python source; requires Qiskit to execute. No hardware control.':'DDRF is decomposed into standard gates for OpenQASM 2.0.';
  }catch(error){if(seq!==exportSeq)return;outputCode='';out.classList.add('error');out.textContent=`Server unavailable: ${error.message}`;}
@@ -384,6 +387,7 @@ function init(){
  });
  $('format').addEventListener('change',compile);$('pulse-envelope').addEventListener('change',renderPulsePreview);$('pulse-panel').addEventListener('toggle',()=>{if($('pulse-panel').open)renderPulsePreview();});
  window.addEventListener('resize',()=>{if(!$('page-editor').classList.contains('hidden'))render();});
+ $('send-to-setup').onclick=()=>{$('format').value='qasm';compile('setup');};
  $('copy').onclick=async()=>{if(!outputCode){message('Nothing to copy.');return;}try{await navigator.clipboard.writeText(outputCode);message('Code copied');}catch{message('Clipboard unavailable. Select text in export panel and copy manually.');}};
  $('save').onclick=()=>{const clean={...circuit,gates:circuit.gates.map(({id,...g})=>g)};
   const blob=new Blob([JSON.stringify(clean,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='sic-circuit.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);message('JSON saved');};

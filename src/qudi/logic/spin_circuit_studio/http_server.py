@@ -1,4 +1,4 @@
-"""Loopback HTTP server for the SiC Circuit Studio frontend and export API."""
+"""Loopback HTTP server for the Spin Circuit Studio frontend and export API."""
 from __future__ import annotations
 
 import json
@@ -51,6 +51,7 @@ class StudioHTTPServer(ThreadingHTTPServer):
 def create_server(
     port: int = 8765,
     on_qasm_export: Callable[[dict, str], None] | None = None,
+    on_setup_export: Callable[[str], None] | None = None,
 ) -> StudioHTTPServer:
     """Create, but do not start, the frontend/API server on IPv4 loopback."""
 
@@ -116,6 +117,12 @@ def create_server(
 
             if fmt == "qasm" and on_qasm_export is not None:
                 on_qasm_export(circuit, code)
+            if (
+                fmt == "qasm"
+                and payload.get("action") == "setup"
+                and on_setup_export is not None
+            ):
+                on_setup_export(code)
             self.send_json(
                 200,
                 {"circuit": circuit, "code": code, "summary": summarize(circuit)},
