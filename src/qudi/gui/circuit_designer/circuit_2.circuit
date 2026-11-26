@@ -1,0 +1,353 @@
+{
+  "version": "1.0",
+  "title": "Untitled",
+  "qubit_labels": [
+    "electron",
+    "Si1",
+    "C1",
+    "Si5",
+    "k1"
+  ],
+  "qubit_meta": [
+    {
+      "spin": "3/2"
+    },
+    {
+      "spin": "1/2"
+    },
+    {
+      "spin": "1/2"
+    },
+    {
+      "spin": "1/2"
+    },
+    {
+      "spin": "3"
+    }
+  ],
+  "local_gate_defs": [],
+  "placements": [
+    {
+      "id": "5b7ad954-ff17-4095-94e5-c40cc094d265",
+      "gate_def_id": "e8b5145b-5f20-47c8-8595-d1f5993d1835",
+      "col": 1,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "amp": "",
+        "A1": "",
+        "freq": "",
+        "A2": ""
+      },
+      "use_default": {},
+      "control_states": {}
+    },
+    {
+      "id": "87a22053-2654-4684-a8d3-e5811b969277",
+      "gate_def_id": "3acb3ea2-dd12-4fb0-b485-5f4b9e68e5a7",
+      "col": 4,
+      "role_to_row": {
+        "qubit": 0,
+        "qubit_1": 2,
+        "qubit_2": 1,
+        "qubit_3": 3
+      },
+      "arg_values": {
+        "a": "",
+        "b": ""
+      },
+      "use_default": {
+        "a": true,
+        "b": true
+      },
+      "control_states": {
+        "qubit": "ms=-3/2"
+      }
+    },
+    {
+      "id": "5f9c1842-f5ea-45ce-87e8-f37ff3967b85",
+      "gate_def_id": "c8e42172-cbde-4a32-af24-524b4befce7f",
+      "col": 5,
+      "role_to_row": {
+        "nuclear": 4,
+        "electron": 0
+      },
+      "arg_values": {
+        "amp": "_I_[\"cnot_amp\"]",
+        "pi_dur": "_I_[\"pi_dur\"]",
+        "transition": "\"low\""
+      },
+      "use_default": {},
+      "control_states": {
+        "electron": "ms=-3/2",
+        "nuclear": "ms=+1"
+      }
+    },
+    {
+      "id": "2b15f982-b97c-44e7-a0a4-86180494e43b",
+      "gate_def_id": "6f880e7c-305d-4c60-bd2b-218359810caf",
+      "col": 6,
+      "role_to_row": {
+        "electron": 0,
+        "nuclear": 1
+      },
+      "arg_values": {
+        "si1_freq": "si1_freq",
+        "freq1": "nuc_freq",
+        "amp1": "_I_[\"rf_amp_rabi\"]",
+        "dur1": "_I_[\"rf_dur_rabi\"]",
+        "phase": "0"
+      },
+      "use_default": {},
+      "control_states": {
+        "electron": "ms=+1/2"
+      }
+    },
+    {
+      "id": "f2482ded-67f5-4357-b66c-0bc72b7b9998",
+      "gate_def_id": "6f880e7c-305d-4c60-bd2b-218359810caf",
+      "col": 7,
+      "role_to_row": {
+        "electron": 1,
+        "nuclear": 2
+      },
+      "arg_values": {
+        "si1_freq": "si1_freq",
+        "freq1": "nuc_freq",
+        "amp1": "_I_[\"rf_amp_rabi\"]",
+        "dur1": "_I_[\"rf_dur_rabi\"]",
+        "phase": "0"
+      },
+      "use_default": {},
+      "control_states": {
+        "electron": "ms=-1/2"
+      }
+    },
+    {
+      "id": "11140bba-6284-4716-ad69-449cc79e752f",
+      "gate_def_id": "c907bec5-14df-4786-81f1-1a6df1031d10",
+      "col": 1,
+      "role_to_row": {
+        "qubit": 0
+      },
+      "arg_values": {
+        "state": "_I_[\"state\"]"
+      },
+      "use_default": {},
+      "control_states": {}
+    },
+    {
+      "id": "da6c6ba3-50c9-4f94-8120-94249f388a61",
+      "gate_def_id": "5b8a9139-0f56-4c72-9882-e46cd30fa800",
+      "col": 2,
+      "role_to_row": {
+        "c": 0,
+        "t": 1
+      },
+      "arg_values": {
+        "a": "g",
+        "v": "k",
+        "f": "555",
+        "h": "",
+        "k": "6"
+      },
+      "use_default": {
+        "k": false,
+        "h": false,
+        "f": false,
+        "v": false,
+        "a": false
+      },
+      "control_states": {}
+    },
+    {
+      "id": "7adf7fc5-039e-47a0-8d07-759a9da8f331",
+      "gate_def_id": "0cdb975a-9fd0-45a5-8d3a-8bf6a8eaafde",
+      "col": 3,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "freq": "mw_freq",
+        "dur": "_I_[\"mw_dur\"]",
+        "amp": "_I_[\"mw_amp\"]",
+        "phase": "0"
+      },
+      "use_default": {},
+      "control_states": {}
+    },
+    {
+      "id": "517efc94-ed76-49c8-baa5-c695e7e96667",
+      "gate_def_id": "0cdb975a-9fd0-45a5-8d3a-8bf6a8eaafde",
+      "col": 8,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "freq": "mw_freq",
+        "dur": "_I_[\"mw_dur\"]",
+        "amp": "_I_[\"mw_amp\"]",
+        "phase": "0"
+      },
+      "use_default": {},
+      "control_states": {}
+    },
+    {
+      "id": "c2b1a748-80d6-4faa-9502-39b2efe4e180",
+      "gate_def_id": "6f880e7c-305d-4c60-bd2b-218359810caf",
+      "col": 9,
+      "role_to_row": {
+        "electron": 1,
+        "nuclear": 1
+      },
+      "arg_values": {
+        "si1_freq": "si1_freq",
+        "freq1": "nuc_freq",
+        "amp1": "_I_[\"rf_amp_rabi\"]",
+        "dur1": "_I_[\"rf_dur_rabi\"]",
+        "phase": "0"
+      },
+      "use_default": {
+        "si1_freq": true,
+        "freq1": true,
+        "amp1": true,
+        "dur1": true,
+        "phase": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "503ae8ca-6807-4d2a-a2b6-6bd248a5afe2",
+      "gate_def_id": "db06162f-5337-482b-aaa0-374912dfedde",
+      "col": 0,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "freqs": "nuc_freqs",
+        "read_dur": "1024"
+      },
+      "use_default": {
+        "freqs": true,
+        "read_dur": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "77c4dd4b-623e-4607-8222-267659bac652",
+      "gate_def_id": "91e81245-988b-4ddc-aef7-fe9f7cd99002",
+      "col": 10,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "freqs": "nuc_freqs",
+        "read_dur": "1024"
+      },
+      "use_default": {
+        "freqs": true,
+        "read_dur": true
+      },
+      "control_states": {}
+    },
+    {
+      "id": "36f7614e-2a7c-4b24-b6a1-b74f505ae02f",
+      "gate_def_id": "637dc316-dd7f-474c-9636-6ccdcdb9b4eb",
+      "col": 11,
+      "role_to_row": {
+        "qubit": 1
+      },
+      "arg_values": {
+        "dur": "100"
+      },
+      "use_default": {
+        "dur": true
+      },
+      "control_states": {}
+    }
+  ],
+  "parameters": [
+    {
+      "name": "sweeps",
+      "value_expr": "range(20)"
+    },
+    {
+      "name": "n_ssr1",
+      "value_expr": "[3000]"
+    },
+    {
+      "name": "n_ssr2",
+      "value_expr": "[3000]"
+    },
+    {
+      "name": "state",
+      "value_expr": "['0']"
+    },
+    {
+      "name": "init_power",
+      "value_expr": "[1.0]"
+    },
+    {
+      "name": "rf_dur_rabi",
+      "value_expr": "[-1]"
+    },
+    {
+      "name": "rf_amp_rabi",
+      "value_expr": "[*np.linspace(0, 0.9, 10)]"
+    },
+    {
+      "name": "cnot_amp",
+      "value_expr": "[0.5]"
+    },
+    {
+      "name": "pi_dur",
+      "value_expr": "[100]"
+    },
+    {
+      "name": "transition",
+      "value_expr": "['low']"
+    },
+    {
+      "name": "ddrf_dur",
+      "value_expr": "[1000]"
+    },
+    {
+      "name": "ddrf_amp",
+      "value_expr": "[0.3]"
+    }
+  ],
+  "ana_seq": [
+    {
+      "kind": "result",
+      "comparison": ">",
+      "threshold": 9,
+      "nlp": 0,
+      "delta": 0,
+      "n_results": 1,
+      "comment": ""
+    },
+    {
+      "kind": "result",
+      "comparison": "<",
+      "threshold": 9,
+      "nlp": 0,
+      "delta": 0,
+      "n_results": 1,
+      "comment": ""
+    }
+  ],
+  "ui_state": {
+    "cell_width": 110,
+    "cell_height": 60,
+    "splitter_sizes": [
+      220,
+      1302,
+      396
+    ],
+    "window_geometry": null
+  },
+  "preamble": "# --- Experiment preamble ---\n",
+  "fixed_middle": "# --- End of experiment ---\n",
+  "fixed_end": "# --- End of experiment ---\n"
+}
