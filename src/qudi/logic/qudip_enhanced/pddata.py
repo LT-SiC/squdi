@@ -431,8 +431,7 @@ class Data:
             print("csv data saved ({:.2f}s).\n If speed is an issue, use hdf."
                   " csv format is useful ony for py2-py3-compatibility.".format(time.time() - t0))
         elif filepath.endswith('.hdf'):
-            df_save=self.df.copy()
-            df_save
+            df_save = self.df.copy()
             columns = df_save.columns
             _cellwise = getattr(pd.DataFrame, 'map', None) or pd.DataFrame.applymap   # DataFrame.map needs pandas >= 2.1
             df_save = _cellwise(df_save[columns], str)   # every cell as str; a new frame, so no dtype conflict with float columns

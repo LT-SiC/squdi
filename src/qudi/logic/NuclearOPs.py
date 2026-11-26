@@ -166,9 +166,6 @@ class NuclearOPs(DataGeneration):
                             zpl_counters.append(name)
 
                 if self.save_smartly:
-
-
-
                     # return zpl_counters + \
                     #        [
                     #            # 'trace',
@@ -188,14 +185,13 @@ class NuclearOPs(DataGeneration):
                     return ['result_{}'.format(i) for i in range(self.number_of_results)] + zpl_counters + \
                            ['trace',
                             'ple_A2', 'ple_A1',
-                            'average_counts', 'events', 'thresholds',
+                            'average_counts', 'events',
                             'start_time', 'end_time',
                             'mw_mixing_frequency', 'local_oscillator_freq',
                             'confocal_x', 'confocal_y', 'confocal_z',
                             'A2_Power',
                             #'aom_Ex_power_measured', 'aom_A1_power_measured', 'Ex_RO_power_measured', 'A2_Power',
-                            # 'EOM_Ex_integrator_voltage',
-                            'windows_ps', 'delays_ps']+yell
+                            ]+yell
 
                 if self.raw_clicks_processing:
                     if self.yellow_repump_compensation:
@@ -210,8 +206,7 @@ class NuclearOPs(DataGeneration):
                             'confocal_x', 'confocal_y', 'confocal_z',
                             # 'aom_Ex_power_measured', 'aom_A1_power_measured', 'Ex_RO_power_measured',
                             # 'EOM_Ex_integrator_voltage', 
-                            'A2_Power',
-                            'windows_ps', 'delays_ps']+yell
+                            'A2_Power']+yell
 
                 else:
                     if self.yellow_repump_compensation:
@@ -222,14 +217,12 @@ class NuclearOPs(DataGeneration):
                     return ['result_{}'.format(i) for i in range(self.number_of_results)] + zpl_counters + \
                            ['trace',
                             'ple_A2', 'ple_A1',
-                            'average_counts', 'events', 'thresholds',
+                            'average_counts', 'events',
                             'start_time', 'end_time',
                             'mw_mixing_frequency', 'local_oscillator_freq',
                             'confocal_x', 'confocal_y', 'confocal_z',
                             # 'aom_Ex_power_measured', 'aom_A1_power_measured', 'Ex_RO_power_measured',
-                            'A2_Power',
-                            # 'EOM_Ex_integrator_voltage',
-                            'windows_ps', 'delays_ps']+yell
+                            'A2_Power']+yell
         except Exception:
             exc_type, exc_value, exc_tb = sys.exc_info()
             traceback.print_exception(exc_type, exc_value, exc_tb)
@@ -249,14 +242,11 @@ class NuclearOPs(DataGeneration):
 
 
                 # # TEMP SOLUTION FIXME LATER, Only for HOM , just uncomment this code
-                self._dtypes = dict(delays_ps='object',
-                                    windows_ps='object', 
-                                    trace='object',
+                self._dtypes = dict(trace='object',
                                     events='int', 
                                     start_time='datetime', 
                                     end_time='datetime',
                                     local_oscillator_freq='float', 
-                                    thresholds='object',
                                     confocal_x='float', 
                                     confocal_y='float', 
                                     confocal_z='float',
@@ -264,8 +254,7 @@ class NuclearOPs(DataGeneration):
 
 
             elif self.raw_clicks_processing:
-                self._dtypes = dict(delays_ps='object',windows_ps='object',
-                                    start_time='datetime', end_time='datetime',
+                self._dtypes = dict(start_time='datetime', end_time='datetime',
                                     events='int',
                                     confocal_x='float', confocal_y='float', confocal_z='float',
                                     average_counts='float')
@@ -273,14 +262,11 @@ class NuclearOPs(DataGeneration):
 
 
             else:
-                self._dtypes = dict(delays_ps='object',
-                                    windows_ps='object', 
-                                    trace='object',
+                self._dtypes = dict(trace='object',
                                     events='int', 
                                     start_time='datetime', 
                                     end_time='datetime',
                                     local_oscillator_freq='float', 
-                                    thresholds='object',
                                     confocal_x='float', 
                                     confocal_y='float', 
                                     confocal_z='float',
@@ -505,7 +491,6 @@ class NuclearOPs(DataGeneration):
                     self.setup_rf(self.current_iterator_df, hashed = self.hashed) #MCAS is ready
                     
                     if abort.is_set(): break
-                    
                     if self.raw_clicks_processing:
                         self.data.set_observations(pd.concat([self.df_refocus_pos.iloc[-1:, :]]*self.number_of_simultaneous_measurements).reset_index(drop=True))
                         self.data.set_observations([OrderedDict(ple_A1=self.queue._tt.ple_A1)]*self.number_of_simultaneous_measurements)
@@ -581,7 +566,6 @@ class NuclearOPs(DataGeneration):
                         pass
                     else:
                         self.data.set_observations([OrderedDict(trace=self.ana_trace.trace)]*self.number_of_simultaneous_measurements)
-
                     # # print('type(self.ana_trace.trace) ', type(self.ana_trace.trace))
                     # # print('self.ana_trace.trace.dtype ', self.ana_trace.trace.dtype)
 
@@ -662,9 +646,11 @@ class NuclearOPs(DataGeneration):
                 if hasattr(self, '_pld'):
                     self.pld.new_data_arrived()
                 if abort.is_set(): break
-               
+
+               # The save is happening here
+                t0 = time.time()
                 self.save()
-               
+                print('NuclearOps run_measurement: t0-t3 = ', time.time()-t0)
                 #end of for
                 # print("end of for")
                 
@@ -1094,14 +1080,14 @@ class NuclearOPs(DataGeneration):
         delta_t = time.time() - self.last_odmr
         if self.odmr_interval != 0 and (delta_t >= self.odmr_interval) or len(self.data.df) == 0 or initial_odmr:
             if check_odmr_frequency_drift_ok and hasattr(self, 'maximum_odmr_drift'):
-                current_L = self.queue.tt.mw_mixing_frequency_L
-                current_C = self.queue.tt.mw_mixing_frequency_C
-                current_R = self.queue.tt.mw_mixing_frequency_R
+                current_L = self.queue._tt.mw_mixing_frequency_L
+                current_C = self.queue._tt.mw_mixing_frequency_C
+                current_R = self.queue._tt.mw_mixing_frequency_R
                 self.add_odmr_script_to_queue(abort, self.odmr_pd)
                 # Is this calculated correctly?
-                current_drift_L = np.round(np.abs(current_L - self.queue.tt.mw_mixing_frequency_L),3)
-                current_drift_C = np.round(np.abs(current_C - self.queue.tt.mw_mixing_frequency_C),3)
-                current_drift_R = np.round(np.abs(current_R - self.queue.tt.mw_mixing_frequency_R),3)
+                current_drift_L = np.round(np.abs(current_L - self.queue._tt.mw_mixing_frequency_L),3)
+                current_drift_C = np.round(np.abs(current_C - self.queue._tt.mw_mixing_frequency_C),3)
+                current_drift_R = np.round(np.abs(current_R - self.queue._tt.mw_mixing_frequency_R),3)
                 print("Current odmr drift:", current_drift_L)
                 if (current_drift_L > self.maximum_odmr_drift) or (current_drift_C > self.maximum_odmr_drift) or (current_drift_R > self.maximum_odmr_drift):
                     logging.getLogger().info("Too much drift ({}, {}, {} > {}), trying again!".format(current_drift_L,current_drift_C,current_drift_R, self.maximum_odmr_drift))
@@ -1381,8 +1367,7 @@ class NuclearOPs(DataGeneration):
                 obs_r = df.rename(columns={'result': 'result_0'}).drop(columns=['step', 'events', 'sm'])
             if not self.raw_clicks_processing: #Do not add result (for some reason, they are analyzed already anyway)
                 data.set_observations(obs_r, start_idx=start_idx)
-                #data.set_observations(df.groupby(['sm']).agg({'thresholds': lambda x: [i for i in x]}), start_idx=start_idx)
-
+                
             data.set_observations(df.groupby(['sm']).agg({'events': np.sum}), start_idx=start_idx)
             data.set_observations(df.groupby(['sm']).agg({'average_counts': np.mean}), start_idx=start_idx)
 
@@ -1409,16 +1394,20 @@ class NuclearOPs(DataGeneration):
 
     def save(self):
         if len(self.iterator_df_done) > 0 and not(hasattr(self, 'do_save') and not self.do_save):
-            Thread1= threading.Thread(target=super().save, kwargs={"notify": False})
+            t0 = time.time(); t = {}
+            Thread1 = threading.Thread(target=super().save, kwargs={"notify": True})  # notify=True prints the inner timings
             Thread1.start()
-            #super(NuclearOPs, self).save(notify=False) #### IMPORTANT
             Thread1.join()
+            t['data_generation.save'] = time.time() - t0
             self.save_sequence_file()
+            t['seq_file'] = time.time() - t0
             self.queue.save_pi3diamond(destination_dir=self.save_dir)
+            t['pi3diamond'] = time.time() - t0
             save_qutip_enhanced(destination_dir=self.save_dir)
-            #TODO
-            # has to switch to qudi log. logging.getLogger().info("saved nuclear to '{} ({:.3f})".format(self.save_dir, time.time() - t0))
-
+            t['qutip_enh'] = time.time() - t0
+            print("save rows={} total={:.2f}s cumulative: {}".format(
+                len(self.iterator_df_done), t['qutip_enh'],
+                " ".join("{}={:.2f}".format(k, v) for k, v in t.items())))
     def save_sequence_file(self):
         seq_message = []
         for key in self._md[self.mcas.name].sequences.keys():
@@ -1442,7 +1431,7 @@ class NuclearOPs(DataGeneration):
                     fp.write('\n-------------------------------------------------------------------\n')
 
             print("call from queue")
-            self.queue.tt.register.save_to_hdf(os.path.join(self.save_dir,"register.hdf"))
+            self.queue._tt.register.save_to_hdf(os.path.join(self.save_dir,"register.hdf"))
 
     def reset_settings(self):
         """

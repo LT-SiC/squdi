@@ -24,5 +24,5 @@ from . import data_generation
 from . import data_generation as dg
 from . import qutrit_sensing
 from . import lmfit_models
-from . import pddata
+from . import pddata_new
 from . import pdplotddata
