@@ -23,12 +23,8 @@ from PySide6.QtGui import QFont
 
 from main_window import MainWindow
 
-# ---- QUDI imports ----
 from qudi.core.connector import Connector
-
-
 from qudi.core.module import GuiBase
-#from logic.qudip_enhanced import *   # legacy QUDI API requires star import
 
 def main():
     app = QApplication.instance() or QApplication(sys.argv)

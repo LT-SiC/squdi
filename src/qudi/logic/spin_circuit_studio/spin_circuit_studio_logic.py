@@ -7,6 +7,7 @@ import threading
 from PySide6 import QtCore
 
 from qudi.core.configoption import ConfigOption
+from qudi.core.connector import Connector
 from qudi.core.module import LogicBase
 from qudi.core.statusvariable import StatusVar
 
@@ -15,10 +16,13 @@ from .http_server import create_server
 
 
 class SpinCircuitStudioLogic(LogicBase):
+    # TODO: How to handle multiple clients? Currently, the last client to export a circuit will overwrite the previous one. Should we maintain a list of clients and their circuits, or just the last one?
+    # TODO: How to get measurement data from the queue logic and disoplay it in the studio?
     """Serve the browser studio and publish generic OpenQASM updates."""
+    queue_logic = Connector(interface='QueueLogic')
 
     _port = ConfigOption(name="port", default=8765, missing="nothing")
-
+    
     circuit = StatusVar(name="circuit", default=None)
     openqasm_code = StatusVar(name="openqasm_code", default="")
 
@@ -35,6 +39,7 @@ class SpinCircuitStudioLogic(LogicBase):
         self._state_lock = threading.RLock()
 
     def on_activate(self) -> None:
+        self._queue_logic = self.queue_logic()
         self._server = create_server(
             port=self._port,
             on_qasm_export=self._record_qasm,
@@ -84,6 +89,10 @@ class SpinCircuitStudioLogic(LogicBase):
     def _log_setup_qasm(self, code: str) -> None:
         print("%s", code)
         self.log.info("%s", code)
+        # TODO: translate QASM code to mcas readable format.
+        # TODO: write code to a file in the Qudi log directory, e.g. "setup.qasm" or "setup_<timestamp>.qasm"
+        # TODO: let queuelogic know that a new setup.qasm is available, so it can be used for the next run
+
 
     def set_circuit(self, circuit: dict) -> str:
         """Normalize and publish a circuit supplied by another logic module."""
